@@ -305,13 +305,15 @@ input#t-dtopct{width:58px;padding:3px 6px;font-size:13px;text-align:right;
   <div class="soltar" id="soltar">
     <h2>Arrastra aquí el PDF del proveedor</h2>
     <p>O pulsa el botón. Tiene que ser un PDF de texto, no un escaneo.</p>
+    <p><b>Para cambiar uno que ya hiciste</b>, suelta juntos el PDF del proveedor y tu Excel.</p>
     <button class="boton" id="btn-elegir" type="button">Elegir archivo</button>
-    <input type="file" id="archivo" accept="application/pdf">
+    <input type="file" id="archivo" multiple
+           accept="application/pdf,.pdf,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
   </div>
   <!-- Para saber de un vistazo si el navegador tiene la última versión o una
        copia guardada de antes. Sin esto no hay forma de distinguirlo, y ya nos
        costó una tarde: se estuvo probando una versión vieja sin saberlo. -->
-  <p class="version">Versión del <span id="version">14/09/2026</span> ·
+  <p class="version">Versión del <span id="version">16/09/2026</span> ·
      si te falla algo, recarga con <b>Cmd + Shift + R</b> antes de nada</p>
   <div id="error" class="error oculto"></div>
 
@@ -319,6 +321,9 @@ input#t-dtopct{width:58px;padding:3px 6px;font-size:13px;text-align:right;
 
     <!-- el aviso de cuentas va lo primero: si queda debajo de los formularios
          hay que bajar para verlo y se pasa por alto -->
+    <div id="reabierto" class="cuadre bien oculto"><b>Reabierto desde tu Excel.</b>
+      Está todo como lo dejaste. Cuando termines, descarga otra vez tu copia en Excel:
+      la de antes no lleva los cambios de hoy.</div>
     <div id="cuadre" class="cuadre oculto"></div>
     <!-- El de las cuentas avisa del dinero; este, de los planos. Un plano
          cortado no se puede arreglar a mano, así que hay que decirlo. -->
@@ -897,10 +902,11 @@ let datos = null, general = 35;
 let pdfAbierto = null;
 let archivoTocado = false;   // si Carlos escribe el nombre a mano, no se le pisa
 
-/* La copia en Excel está HECHA Y PROBADA pero apagada: Mery y Carlos todavía
-   están decidiendo si la quieren. Poniendo esto en true vuelve a aparecer el
-   botón y el nombre de archivo con número · cliente · obra. Nada más que tocar. */
-let COPIA_EXCEL = false;
+/* La copia en Excel de Carlos. Desde el 16 de septiembre es además su archivo
+   de trabajo: lleva una hoja oculta con todo lo que hizo, y soltándola junto al
+   PDF del proveedor el presupuesto se reabre como lo dejó. Con false vuelve a
+   comportarse como antes: sin botón y con el nombre de archivo corto. */
+let COPIA_EXCEL = true;
 
 function miles(entero){ return entero.replace(/\B(?=(\d{3})+(?!\d))/g,'.'); }
 function eur(v){ const p = Math.abs(v).toFixed(2).split('.');
@@ -2004,13 +2010,16 @@ function mismoNumero(p){
    Una "otra partida" es `tipo:'obra'`, como las de obra que ya lee Cealca: sin
    número y sin medidas. Las dos se marcan `esManual` (no `esCopia`: no salen
    de ninguna) y entran con `udsOriginal = 0`, porque no venían del proveedor. */
-function añadirPartida(tipo){
+function partidaEnBlanco(tipo){
   const p = {pos:'', ref:'', uds:1, udsOriginal:0, coste:0, pct:general, pvpFijo:null,
              tocada:false, ancho:null, alto:null, altoHoja:null, cajon:null,
              color:'', herraje:'', transmitancia:'', descripcion:[], plano:null,
-             aspecto:0, esManual:true};
+             aspecto:0, esManual:true, origen:null};
   if (tipo === 'obra') p.tipo = 'obra';
-  datos.partidas.push(p);
+  return p;
+}
+function añadirPartida(tipo){
+  datos.partidas.push(partidaEnBlanco(tipo));
   refrescar();
   const campo = document.querySelector('[data-nombre="'+(datos.partidas.length-1)+'"]');
   if (campo){ campo.scrollIntoView({block:'center'}); campo.focus(); }
@@ -2359,7 +2368,21 @@ function hojaXML(filas){
 <sheetData>${cuerpo}</sheetData></worksheet>`;
 }
 
-function libroXLSX(filas){
+/* La hoja oculta `datos`: el estado de trabajo en JSON, para reabrir.
+   Una celda de Excel admite como mucho 32.767 caracteres, así que se trocea en
+   filas de la columna A. Todo lo que no es ASCII se escribe como \uXXXX (sigue
+   siendo JSON válido): así un corte nunca parte una letra en dos. */
+const TROZO_ESTADO = 30000;
+function filasEstado(estado){
+  const json = JSON.stringify(estado).replace(/[-￿]/g,
+    c => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'));
+  const filas = [['No toques esta hoja: la herramienta la usa para reabrir el presupuesto.']];
+  for (let i = 0; i < json.length; i += TROZO_ESTADO) filas.push([json.slice(i, i + TROZO_ESTADO)]);
+  return filas;
+}
+
+function libroXLSX(filas, estado){
+  const T = 'application/vnd.openxmlformats-officedocument.spreadsheetml';
   return zip([
     {nombre:'[Content_Types].xml', texto:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -2367,6 +2390,7 @@ function libroXLSX(filas){
 <Default Extension="xml" ContentType="application/xml"/>
 <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
 <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+${estado ? `<Override PartName="/xl/worksheets/sheet2.xml" ContentType="${T}.worksheet+xml"/>` : ''}
 <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
 </Types>`},
     {nombre:'_rels/.rels', texto:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -2375,11 +2399,13 @@ function libroXLSX(filas){
 </Relationships>`},
     {nombre:'xl/workbook.xml', texto:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-<sheets><sheet name="Presupuesto" sheetId="1" r:id="rId1"/></sheets></workbook>`},
+<sheets><sheet name="Presupuesto" sheetId="1" r:id="rId1"/>${estado
+  ? '<sheet name="datos" sheetId="2" state="hidden" r:id="rId3"/>' : ''}</sheets></workbook>`},
     {nombre:'xl/_rels/workbook.xml.rels', texto:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
 <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
 <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+${estado ? '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/>' : ''}
 </Relationships>`},
     {nombre:'xl/styles.xml', texto:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
@@ -2393,7 +2419,7 @@ function libroXLSX(filas){
 <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`},
     {nombre:'xl/worksheets/sheet1.xml', texto:hojaXML(filas)}
-  ]);
+  ].concat(estado ? [{nombre:'xl/worksheets/sheet2.xml', texto:hojaXML(filasEstado(estado))}] : []));
 }
 
 /* La copia de Carlos: mismas columnas y mismo orden que la pantalla, para que
@@ -2418,17 +2444,19 @@ function filasHoja(){
     [],
     [N('Hueco'), N('Ancho (mm)'), N('Alto hueco (mm)'), N('Ventana + cajón'), N('Uds'),
      N('Coste proveedor'), N('Margen %'), N('PVP unidad'), N('Total línea'), N('Precio a mano'),
-     N('Ref. del proveedor')]
+     N('Ref. del proveedor'), N('Origen')]
   ];
   let base = 0, coste = 0;
   datos.partidas.forEach(p => {
     if (p.tipo === 'titulo'){ filas.push([N(p.pos)]); return; }
     const pvp = pvpDe(p);
     base += pvp * p.uds; coste += (p.coste||0) * p.uds;
+    // sin esta columna un duplicado se ve igual que su original
     filas.push([etiqueta(p), p.ancho || '', p.alto || '',
       p.cajon ? p.altoHoja + ' + ' + p.cajon : '',
       p.uds, p.coste || '', +pctDe(p).toFixed(2), pvp, pvp * p.uds,
-      p.pvpFijo !== null ? 'sí' : '', p.ref || '']);
+      p.pvpFijo !== null ? 'sí' : '', p.ref || '',
+      p.esCopia ? 'duplicado' : p.esManual ? 'añadida a mano' : 'proveedor']);
   });
   const c = cuentas(base);
   filas.push([], [N('Base imponible'),'','','','','','','', +base.toFixed(2)]);
@@ -2449,10 +2477,184 @@ function filasHoja(){
 }
 
 function descargarHoja(){
-  const url = URL.createObjectURL(libroXLSX(filasHoja()));
+  const url = URL.createObjectURL(libroXLSX(filasHoja(), estadoDeTrabajo()));
   const a = document.createElement('a');
   a.href = url; a.download = nombreHoja(); a.click();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/* ---------- REABRIR UN PRESUPUESTO DESDE SU EXCEL ----------
+
+   Carlos suelta juntos el PDF del proveedor y su Excel. El PDF se lee como
+   siempre y encima se aplica lo que hizo, que va en la hoja oculta `datos`.
+   Nada de base de datos: sus precios siguen sin salir de su ordenador.
+
+   Qué se guarda y qué no:
+   - Los planos NO. Salen otra vez del PDF del proveedor, y los que recortó a
+     mano se rehacen con `p.recorte`. Por eso sin ese PDF no se puede reabrir.
+   - Cada partida lleva `origen`: su posición en lo que devuelve leerPDF(), o
+     null si la añadió a mano. Con eso se sabe de dónde sacar lo que no se
+     guarda (plano, color, herraje, cajón).
+   - Una huella del PDF del proveedor. Si el Excel es de otra obra, se avisa y
+     no se mezcla nada.
+   - Lo que manda es la hoja oculta, NO las celdas visibles: si Carlos tocara
+     una celda, no habría forma de saber qué número es el bueno. */
+
+const VERSION_ESTADO = 1;
+const CAMPOS_GUARDADOS = ['tipo','pos','ref','uds','udsOriginal','coste','costeTocado','pct',
+  'pvpFijo','tocada','descripcion','esCopia','esManual','ancho','alto','recorte'];
+
+function huellaDe(d){
+  return {proveedor: d.cab.proveedor || null, numProveedor: d.cab.numProveedor || null,
+          base: d.totales.base == null ? null : d.totales.base, partidas: d.partidas.length};
+}
+const mismaHuella = (a, b) => !!a && !!b && a.proveedor === b.proveedor &&
+  a.numProveedor === b.numProveedor && a.base === b.base && a.partidas === b.partidas;
+
+function partidaAGuardar(p){
+  const s = {origen: p.origen == null ? null : p.origen};
+  CAMPOS_GUARDADOS.forEach(k => { if (p[k] !== undefined) s[k] = p[k]; });
+  return s;
+}
+function estadoDeTrabajo(){
+  return {
+    v: VERSION_ESTADO, huella: datos.huella,
+    cab: {num: $('p-num').value, cliente: $('c-nombre').value, dir: $('c-dir').value,
+          tel: $('c-tel').value, obra: $('p-obra').value, archivo: $('p-archivo').value,
+          archivoTocado},
+    redondeo: $('redondeo').value, general, descuento: $('t-dtopct').value,
+    partidas: datos.partidas.map(partidaAGuardar),
+    // de las quitadas sí se guarda el número: ya no se renumeran, y el cartel dice
+    // "has quitado la V1" con el que tenían al quitarlas
+    quitadas: datos.quitadas.map(q => ({pos: q.pos, num: q.p.num, p: partidaAGuardar(q.p)}))
+  };
+}
+
+// `leidas` es lo que acaba de salir del PDF, sin tocar: de ahí se copia lo que no
+// se guarda. Una partida a mano sale de una en blanco.
+function partidaDeEstado(s, leidas){
+  const p = s.origen != null && leidas[s.origen]
+    ? Object.assign({}, leidas[s.origen]) : partidaEnBlanco(s.tipo);
+  CAMPOS_GUARDADOS.forEach(k => { if (s[k] !== undefined) p[k] = s[k]; });
+  p.origen = s.origen == null ? null : s.origen;
+  return p;
+}
+function aplicarEstado(e){
+  const leidas = datos.partidas;
+  datos.partidas = e.partidas.map(s => partidaDeEstado(s, leidas));
+  datos.quitadas = (e.quitadas || []).map(q =>
+    ({pos: q.pos, p: Object.assign(partidaDeEstado(q.p, leidas), {num: q.num})}));
+  $('p-num').value = e.cab.num || '';   $('c-nombre').value = e.cab.cliente || '';
+  $('c-dir').value = e.cab.dir || '';   $('c-tel').value = e.cab.tel || '';
+  $('p-obra').value = e.cab.obra || '';
+  archivoTocado = !!e.cab.archivoTocado;
+  $('p-archivo').value = archivoTocado ? (e.cab.archivo || '') : nombrePropuesto();
+  $('redondeo').value = e.redondeo || '0';
+  general = Number(e.general) || 0; $('libre').value = general;
+  $('t-dtopct').value = e.descuento || 0;
+}
+
+const escalaDePagina = vista => Math.min(ESCALA, Math.sqrt(10e6 / (vista.width * vista.height)));
+
+/* Los planos que recortó a mano se rehacen sobre la misma página y a la misma
+   escala que usa el recortador, así que salen igual que el día que los marcó. */
+async function rehacerRecortes(){
+  const todas = datos.partidas.concat(datos.quitadas.map(q => q.p)).filter(p => p.recorte);
+  const lienzos = {};
+  for (const p of todas){
+    const r = p.recorte;
+    if (!lienzos[r.pag]){
+      if (r.pag < 1 || r.pag > pdfAbierto.numPages) continue;
+      const pagina = await pdfAbierto.getPage(r.pag);
+      const escala = escalaDePagina(pagina.getViewport({scale:1}));
+      const vista = pagina.getViewport({scale: escala});
+      const c = document.createElement('canvas');
+      c.width = Math.floor(vista.width); c.height = Math.floor(vista.height);
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+      await pagina.render({canvasContext: ctx, viewport: vista}).promise;
+      lienzos[r.pag] = {c, escala};
+    }
+    const {c, escala} = lienzos[r.pag];
+    Object.assign(p, planoDeLienzo(c, escala, Math.round(r.x * escala), Math.round(r.y * escala),
+                                   Math.max(1, Math.round(r.w * escala)), Math.max(1, Math.round(r.h * escala))),
+                  {pagPlano: r.pag, cortado: false, planoAMano: true});
+  }
+  Object.values(lienzos).forEach(l => { l.c.width = 0; l.c.height = 0; });   // soltar memoria
+}
+
+/* Leer el .xlsx sin librería. Es un ZIP: el nuestro va sin comprimir, pero si
+   Carlos lo abre y lo guarda, Excel lo recomprime con deflate, y eso lo
+   descomprime el propio navegador (Chrome, y Safari desde la 16.4). */
+async function abrirZip(buffer){
+  const b = new Uint8Array(buffer), dv = new DataView(buffer), dec = new TextDecoder();
+  let fin = -1;
+  for (let i = b.length - 22; i >= Math.max(0, b.length - 65557); i--)
+    if (dv.getUint32(i, true) === 0x06054b50){ fin = i; break; }
+  if (fin < 0) throw new Error('excel-roto');
+  const entradas = {};
+  let o = dv.getUint32(fin + 16, true);
+  for (let k = dv.getUint16(fin + 10, true); k > 0; k--){
+    if (dv.getUint32(o, true) !== 0x02014b50) throw new Error('excel-roto');
+    const lnom = dv.getUint16(o + 28, true);
+    entradas[dec.decode(b.subarray(o + 46, o + 46 + lnom))] =
+      {metodo: dv.getUint16(o + 10, true), tam: dv.getUint32(o + 20, true), local: dv.getUint32(o + 42, true)};
+    o += 46 + lnom + dv.getUint16(o + 30, true) + dv.getUint16(o + 32, true);
+  }
+  // los tamaños van en el directorio central: el de la cabecera local puede venir a 0
+  return async nombre => {
+    const e = entradas[nombre];
+    if (!e) return null;
+    const ini = e.local + 30 + dv.getUint16(e.local + 26, true) + dv.getUint16(e.local + 28, true);
+    const crudo = b.subarray(ini, ini + e.tam);
+    if (e.metodo === 0) return dec.decode(crudo);
+    if (e.metodo !== 8 || typeof DecompressionStream === 'undefined') throw new Error('excel-roto');
+    const flujo = new Blob([crudo]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return await new Response(flujo).text();
+  };
+}
+
+const xmlDe = t => new DOMParser().parseFromString(t, 'application/xml');
+// por nombre local: Excel a veces escribe las etiquetas con prefijo (x:sheet)
+const etiquetas = (nodo, nombre) => [...nodo.getElementsByTagName('*')].filter(n => n.localName === nombre);
+const atributo = (nodo, nombre) => { const a = [...nodo.attributes].find(a => a.localName === nombre);
+                                     return a ? a.value : null; };
+
+/* Devuelve el estado guardado, o lanza un error que se le explica a Carlos.
+   La hoja se busca por su nombre en workbook.xml y sus relaciones, no por un
+   nombre de archivo fijo: Excel los renumera al guardar. Y se leen las dos
+   formas de guardar texto, en la celda o en sharedStrings.xml, porque Excel
+   pasa de una a otra. */
+async function leerEstadoDeExcel(buffer){
+  const leer = await abrirZip(buffer);
+  const libro = await leer('xl/workbook.xml'), rels = await leer('xl/_rels/workbook.xml.rels');
+  if (!libro || !rels) throw new Error('excel-roto');
+  const hoja = etiquetas(xmlDe(libro), 'sheet').find(s => s.getAttribute('name') === 'datos');
+  if (!hoja) throw new Error('excel-sin-datos');
+  const rel = etiquetas(xmlDe(rels), 'Relationship').find(r => r.getAttribute('Id') === atributo(hoja, 'id'));
+  if (!rel) throw new Error('excel-roto');
+  const destino = rel.getAttribute('Target');
+  const xml = await leer(destino.startsWith('/') ? destino.slice(1) : 'xl/' + destino);
+  if (!xml) throw new Error('excel-roto');
+  const compartidas = await leer('xl/sharedStrings.xml');
+  const cadenas = compartidas ? etiquetas(xmlDe(compartidas), 'si')
+    .map(si => etiquetas(si, 't').filter(t => t.parentNode.localName !== 'rPh').map(t => t.textContent).join('')) : [];
+
+  const celdas = etiquetas(xmlDe(xml), 'c').map(c => {
+    const ref = c.getAttribute('r') || '', tipo = c.getAttribute('t');
+    const v = etiquetas(c, 'v')[0];
+    const texto = tipo === 's' ? cadenas[+(v && v.textContent)] :
+                  tipo === 'inlineStr' ? etiquetas(c, 't').map(t => t.textContent).join('') :
+                  v ? v.textContent : '';
+    return {col: ref.replace(/\d+/g, ''), fila: parseInt(ref.replace(/\D+/g, '')), texto: texto || ''};
+  }).filter(c => c.col === 'A' && c.fila >= 2).sort((a, b) => a.fila - b.fila);
+
+  let estado;
+  try{ estado = JSON.parse(celdas.map(c => c.texto).join('')); }
+  catch(e){ throw new Error('excel-sin-datos'); }
+  if (!estado || !estado.huella || !Array.isArray(estado.partidas)) throw new Error('excel-sin-datos');
+  if (estado.v > VERSION_ESTADO) throw new Error('excel-nuevo');
+  return estado;
 }
 
 /* ---------- 5. generar el PDF ---------- */
@@ -2699,7 +2901,7 @@ function generarPDF(){
 /* ---------- 4. cableado ---------- */
 
 $('btn-elegir').onclick = () => $('archivo').click();
-$('archivo').onchange = e => { if (e.target.files[0]) cargar(e.target.files[0]); };
+$('archivo').onchange = e => { if (e.target.files.length) cargar(e.target.files); };
 const zona = $('soltar');
 ['dragenter','dragover'].forEach(ev => zona.addEventListener(ev, e => {
   e.preventDefault(); zona.classList.add('encima');
@@ -2708,30 +2910,51 @@ const zona = $('soltar');
   e.preventDefault(); zona.classList.remove('encima');
 }));
 zona.addEventListener('drop', e => {
-  const f = e.dataTransfer.files[0];
-  if (f) cargar(f);
+  if (e.dataTransfer.files.length) cargar(e.dataTransfer.files);
 });
 
-async function cargar(archivo){
+/* Uno o dos archivos: el PDF del proveedor solo, o el PDF y el Excel de Carlos
+   para reabrir. Todo lo que no es .xlsx se trata como PDF, como antes. */
+async function cargar(archivos){
+  archivos = Array.from(archivos);
   $('error').classList.add('oculto');
-  zona.querySelector('h2').textContent = 'Leyendo ' + archivo.name + '…';
+  const hojas = archivos.filter(f => /\.xlsx$/i.test(f.name));
+  const pdfs  = archivos.filter(f => !/\.xlsx$/i.test(f.name));
   try{
-    const buffer = await archivo.arrayBuffer();
-    datos = await leerPDF(buffer);
-    datos.partidas.forEach(p => { p.pct = general; p.pvpFijo = null; p.tocada = false; });
-    datos.quitadas = [];
-    datos.partidas.forEach(p => { p.udsOriginal = p.uds; });
+    if (!pdfs.length) throw new Error('falta-pdf');
+    if (pdfs.length > 1 || hojas.length > 1) throw new Error('demasiados');
+    zona.querySelector('h2').textContent = 'Leyendo ' + pdfs[0].name + '…';
+    // el Excel primero: si no vale, no hace falta leer el PDF entero para decirlo
+    const estado = hojas.length ? await leerEstadoDeExcel(await hojas[0].arrayBuffer()) : null;
+    const leido = await leerPDF(await pdfs[0].arrayBuffer());
+    leido.partidas.forEach((p, i) => {
+      p.pct = general; p.pvpFijo = null; p.tocada = false;
+      p.udsOriginal = p.uds;
+      p.origen = i;               // para encontrarla al reabrir desde el Excel
+    });
+    leido.quitadas = [];
     // solo a las ventanas: el concepto de una partida de obra ("Apertura de
     // hueco de 3150 mm") empieza por texto y no lleva código de hueco
-    datos.partidas.forEach(p => {
+    leido.partidas.forEach(p => {
       if (!esVentana(p)) { p.ref = ''; return; }
       const {ref, nombre} = separarCodigo(p.pos);
       p.ref = ref; p.pos = nombre;
     });
+    leido.huella = huellaDe(leido);
+    if (estado && !mismaHuella(estado.huella, leido.huella)){
+      const err = new Error('otra-obra');
+      err.detalle = estado; throw err;
+    }
+    datos = leido;
     archivoTocado = false;
     $('p-obra').value = datos.cab.obra || '';
     $('p-archivo').value = nombrePropuesto();
     if (!$('p-num').value) $('p-num').value = new Date().getFullYear() + '-';
+    if (estado){
+      aplicarEstado(estado);
+      await rehacerRecortes();
+    }
+    $('reabierto').classList.toggle('oculto', !estado);
     zona.classList.add('oculto');
     $('cuadre').classList.remove('oculto');
     $('app').classList.remove('oculto');
@@ -2745,8 +2968,29 @@ async function cargar(archivo){
         'Manda este PDF y se añade.',
       'sin-partidas':
         'He reconocido al proveedor pero no he encontrado ninguna ventana. ' +
-        'Puede que sea un escaneo o una foto: si el PDF es una imagen, dentro no hay texto que leer.'
+        'Puede que sea un escaneo o una foto: si el PDF es una imagen, dentro no hay texto que leer.',
+      'falta-pdf':
+        'Para reabrir un presupuesto hacen falta dos archivos: tu Excel y el PDF del proveedor ' +
+        'de esa obra. Suéltalos juntos, o elígelos a la vez con el botón.',
+      'demasiados':
+        'Suelta un solo presupuesto cada vez: el PDF del proveedor y, si quieres reabrirlo, su Excel.',
+      'excel-sin-datos':
+        'Este Excel no sirve para reabrir el presupuesto. Tiene que ser la copia que descargaste ' +
+        'de la herramienta, la que acaba en "(mis costes)".',
+      'excel-roto':
+        'No he podido leer este Excel. Si lo has guardado con otro programa, prueba con la copia ' +
+        'original que descargaste de la herramienta.',
+      'excel-nuevo':
+        'Este Excel lo hizo una versión más nueva de la herramienta. Recarga la página con ' +
+        'Cmd + Shift + R y vuelve a probar.'
     };
+    if (err.message === 'otra-obra'){
+      const h = err.detalle.huella, c = err.detalle.cab || {};
+      MENSAJES['otra-obra'] = 'Este Excel y este PDF no son de la misma obra, así que no he mezclado nada. ' +
+        'El Excel es ' + ([c.num, c.cliente, c.obra].filter(Boolean).join(' · ') || 'de otro presupuesto') +
+        (h.numProveedor ? ', hecho sobre el presupuesto ' + h.numProveedor + ' del proveedor' : '') +
+        '. Suéltalo junto al PDF del proveedor de esa obra.';
+    }
     $('error').textContent = MENSAJES[err.message] ||
       ('No he podido leer el archivo: ' + err.message);
     $('error').classList.remove('oculto');
@@ -2855,7 +3099,7 @@ async function pintarPaginaRecorte(){
   const base = pagina.getViewport({scale:1});
   /* Como mucho ~10 millones de píxeles: una página a ESCALA son 12,5 y Safari
      de iPhone deja el lienzo en blanco pasado ese tamaño, sin dar error. */
-  const escala = Math.min(ESCALA, Math.sqrt(10e6 / (base.width * base.height)));
+  const escala = escalaDePagina(base);
   const vista = pagina.getViewport({scale: escala});
   // se pinta aparte y se copia al final: si pasa de página deprisa, dos pintados
   // a la vez sobre el mismo lienzo hacen fallar a pdf.js
@@ -2916,23 +3160,29 @@ $('rc-hoja').addEventListener('pointerup', e => {
 });
 $('rc-hoja').addEventListener('pointercancel', () => { rc.inicio = null; });
 
+/* Un trozo del lienzo de una página, en píxeles del lienzo, pasado a plano.
+   Las medidas van en PUNTOS de la página, como los recortes automáticos. Si se
+   guardaran en píxeles, escalaDeLosPlanos() lo trataría como un dibujo cinco
+   veces más grande y este plano saldría con un tamaño que no le toca. */
+function planoDeLienzo(c, escala, x, y, w, h){
+  const out = document.createElement('canvas');
+  out.width = w; out.height = h;
+  const ctx = out.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
+  ctx.drawImage(c, x, y, w, h, 0, 0, w, h);
+  return {plano: out.toDataURL('image/png'), anchoPt: w / escala, altoPt: h / escala, aspecto: h / w};
+}
 function usarRecorte(){
   if (!rc.sel) return;
   const c = $('rc-canvas');
   const k = c.width / rc.sel.ancho;                 // de píxeles de pantalla a píxeles del lienzo
   const x = Math.round(rc.sel.x * k), y = Math.round(rc.sel.y * k);
   const w = Math.max(1, Math.round(rc.sel.w * k)), h = Math.max(1, Math.round(rc.sel.h * k));
-  const out = document.createElement('canvas');
-  out.width = w; out.height = h;
-  const ctx = out.getContext('2d');
-  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, w, h);
-  ctx.drawImage(c, x, y, w, h, 0, 0, w, h);
   const p = datos.partidas[rc.i];
-  p.plano = out.toDataURL('image/png');
-  /* En PUNTOS de la página, como los recortes automáticos. Si se guardara en
-     píxeles, escalaDeLosPlanos() lo trataría como un dibujo cinco veces más
-     grande y este plano saldría con un tamaño que no le toca. */
-  p.anchoPt = w / rc.escala; p.altoPt = h / rc.escala; p.aspecto = h / w;
+  Object.assign(p, planoDeLienzo(c, rc.escala, x, y, w, h));
+  // dónde recortó, en puntos: la imagen no va en el Excel, así que al reabrir
+  // el plano se rehace con esto
+  p.recorte = {pag: rc.pag, x: x / rc.escala, y: y / rc.escala, w: w / rc.escala, h: h / rc.escala};
   p.pagPlano = rc.pag; p.cortado = false; p.planoAMano = true;
   rc.ultimaPag = rc.pag;
   cerrarRecorte();
@@ -2967,7 +3217,8 @@ $('btn-pdf').onclick = () => {
 };
 $('btn-hoja').onclick = () => {
   descargarHoja();
-  $('estado').textContent = 'Guarda los dos archivos juntos, en la carpeta de la obra.';
+  $('estado').textContent = 'Guárdalo en la carpeta de la obra, junto al PDF del proveedor: ' +
+                            'para cambiar el presupuesto otro día hacen falta los dos.';
   $('btn-hoja').classList.add('fantasma');
 };
 // mientras no lo escriba a mano, el nombre se mantiene al día
@@ -2977,6 +3228,7 @@ $('p-archivo').addEventListener('input', () => { archivoTocado = true; });
 }));
 $('btn-otro').onclick = () => {
   datos = null; $('app').classList.add('oculto'); zona.classList.remove('oculto');
+  $('reabierto').classList.add('oculto');
   zona.querySelector('h2').textContent = 'Arrastra aquí el PDF del proveedor';
   $('archivo').value = '';
 };
