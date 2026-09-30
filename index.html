@@ -99,7 +99,10 @@ button.chip[aria-pressed="true"]{background:var(--cota);border-color:var(--cota)
        box-shadow:var(--sombra);overflow:hidden}
 .scroll{overflow-x:auto}
 .rejilla{min-width:800px}
-.fila{display:grid;grid-template-columns:112px minmax(140px,1fr) 106px 116px 118px 116px 84px;
+/* La última columna es la de los botones: son cinco (volver al margen, recortar
+   el plano, corregir su medida, duplicar y quitar) y necesitan su sitio, o se
+   montan encima del total de la línea. */
+.fila{display:grid;grid-template-columns:112px minmax(140px,1fr) 106px 116px 118px 116px 146px;
       gap:14px;align-items:start;padding:12px 18px;border-top:1px solid var(--linea)}
 /* Todo en la misma línea. Ojo: lo que hay que alinear es EL TEXTO, no la caja.
    Los campos con borde centran su texto dentro de la caja; el texto suelto
@@ -110,7 +113,7 @@ button.chip[aria-pressed="true"]{background:var(--cota);border-color:var(--cota)
 .total-linea{padding-top:6.5px}
 .botones{padding-top:5.5px}
 /* Título de sección del proveedor: ocupa toda la fila, sin columnas de precio */
-.fila.titulo{grid-template-columns:minmax(0,1fr) 84px;align-items:center;
+.fila.titulo{grid-template-columns:minmax(0,1fr) 146px;align-items:center;
              background:var(--papel-2)}
 .fila.titulo .hueco-edit{font-weight:700;letter-spacing:.04em;text-transform:uppercase}
 .fila.titulo .botones{padding-top:0}
@@ -180,6 +183,28 @@ input.mm-edit:focus{border-color:var(--cota);outline:none}
          -webkit-user-select:none;overflow:hidden}
 #rc-canvas{display:block;width:auto;height:auto;background:#fff;
          max-width:calc(100vw - 24px);max-height:calc(100vh - 150px)}
+#ct-canvas{display:block;width:auto;height:auto;background:#fff;
+         max-width:calc(100vw - 24px);max-height:calc(100vh - 170px)}
+.ct-campo{display:flex;align-items:center;gap:8px;color:#c5d3da;font-size:13px}
+.ct-campo input{width:120px;font-family:"IBM Plex Mono",monospace;font-size:15px;
+         padding:6px 8px;border-radius:6px;border:1px solid #5b7280;background:#fff;color:#152530}
+.ct-campo input:disabled{opacity:.45}
+/* El OK va pegado a la casilla, no abajo con los demás: tres botones al pie y
+   el importante apagado no se entendía (lo dijo Mery probándolo). */
+.ct-campo .boton{padding:7px 16px;font-size:14px}
+.ct-campo .boton:disabled{opacity:.4;cursor:default}
+/* Atajos para no teclear la medida de la ventana, que es la que más se corrige.
+   Las parciales (835, 850...) las escribe él: la herramienta no puede leer el
+   número del dibujo, así que no se inventa ninguna propuesta. */
+/* El aviso ocupa el sitio de la ayuda, no una línea nueva: si empuja, el plano
+   baja y el siguiente toque cae donde no es. Ya pasó. */
+.rc-ayuda{min-height:36px}
+.rc-ayuda.avisando{color:#ffc14d}
+.ct-atajos{display:flex;gap:6px}
+.ct-atajos button{font-size:12px;padding:6px 10px;border-radius:6px;cursor:pointer;
+         border:1px solid #5b7280;background:transparent;color:#c5d3da;white-space:nowrap}
+.ct-atajos button:hover:not(:disabled){border-color:#2f9ad6;color:#fff}
+.ct-atajos button:disabled{opacity:.35;cursor:default}
 .rc-marco{position:absolute;border:2px solid #2f9ad6;background:rgba(47,154,214,.12);
          box-shadow:0 0 0 9999px rgba(0,0,0,.38);pointer-events:none}
 .rc-pie{display:flex;justify-content:flex-end;gap:10px;padding:12px 18px}
@@ -205,7 +230,7 @@ input.coste-edit:focus{border-color:var(--cota);background:var(--papel);outline:
           color:var(--ajustada);cursor:pointer;font-size:15px;line-height:1;visibility:hidden}
 .fila.ajustada .revertir{visibility:visible}
 .revertir:hover{border-color:var(--ajustada)}
-.botones{display:flex;gap:2px;justify-content:flex-end}
+.botones{display:flex;gap:2px;justify-content:flex-end;padding-left:8px}
 /* La etiqueta va DEBAJO del botón. Encima la recortaría la tabla, y a la
    izquierda tapaba el total de la línea justo cuando vas a pulsar. */
 .botones button{position:relative}
@@ -291,6 +316,7 @@ input#t-dtopct{width:58px;padding:3px 6px;font-size:13px;text-align:right;
   .revertir::after{content:" Volver al margen general"}
   .duplicar::after{content:" Duplicar partida"}
   .recortar::after{content:" Recortar el plano"}
+  .recortar[data-cota]::after{content:" Corregir la medida del plano"}
   .quitar::after{content:" Eliminar partida"}
   input.uds-edit{width:62px;font-size:16px;padding:3px 5px}
   input.mm-edit{width:74px;font-size:16px;padding:3px 5px}
@@ -320,7 +346,7 @@ input#t-dtopct{width:58px;padding:3px 6px;font-size:13px;text-align:right;
   <!-- Para saber de un vistazo si el navegador tiene la última versión o una
        copia guardada de antes. Sin esto no hay forma de distinguirlo, y ya nos
        costó una tarde: se estuvo probando una versión vieja sin saberlo. -->
-  <p class="version">Versión del <span id="version">17/09/2026</span> ·
+  <p class="version">Versión del <span id="version">30/09/2026</span> ·
      si te falla algo, recarga con <b>Cmd + Shift + R</b> antes de nada</p>
   <div id="error" class="error oculto"></div>
 
@@ -461,6 +487,32 @@ input#t-dtopct{width:58px;padding:3px 6px;font-size:13px;text-align:right;
   <div class="rc-pie">
     <button type="button" class="boton fantasma" id="rc-cancelar">Cancelar</button>
     <button type="button" class="boton" id="rc-usar" disabled>Usar este recorte</button>
+  </div>
+</div>
+
+<div id="cota" class="recorte oculto" role="dialog" aria-modal="true" aria-labelledby="ct-titulo">
+  <div class="rc-barra">
+    <b id="ct-titulo">Corrige la medida del plano</b>
+    <span class="rc-ayuda" id="ct-ayuda"><b>1.</b> Toca el número que está mal: se marca solo.
+       <b>2.</b> Escribe el bueno y pulsa <b>OK</b>. Puedes corregir tantos como quieras;
+       si algún número se resiste, márcalo arrastrando un recuadro.</span>
+    <span id="ct-aviso" hidden></span>
+    <label class="ct-campo">La medida buena
+      <input type="text" id="ct-texto" inputmode="numeric"
+             placeholder="toca antes el número" disabled>
+      <button type="button" class="boton" id="ct-usar" disabled>OK</button></label>
+    <div class="ct-atajos">
+      <button type="button" id="ct-ancho" disabled></button>
+      <button type="button" id="ct-alto" disabled></button>
+    </div>
+  </div>
+  <div class="rc-lienzo"><div class="rc-hoja" id="ct-hoja">
+    <canvas id="ct-canvas" width="0" height="0"></canvas>
+    <div id="ct-marco" class="rc-marco oculto"></div>
+  </div></div>
+  <div class="rc-pie">
+    <button type="button" class="boton fantasma" id="ct-deshacer" disabled>Deshacer la última</button>
+    <button type="button" class="boton" id="ct-cerrar">Listo</button>
   </div>
 </div>
 
@@ -2042,10 +2094,36 @@ function notaDeFila(p){
   if (p.esCopia) return p.ref ? 'duplicado de la ' + p.ref + ' del proveedor' : 'duplicado';
   return mismoNumero(p) ? '' : 'en el PDF del proveedor: ' + p.ref;
 }
+/* ¿Ha cambiado él la medida que traía el proveedor? Se compara con lo que se
+   leyó del PDF (`anchoProv`/`altoProv`), que no se toca nunca. Las partidas a
+   mano no tienen con qué comparar. */
+const medidaCambiada = p => !!p.anchoProv &&
+  (Number(p.ancho) !== p.anchoProv || Number(p.alto) !== p.altoProv);
+
 /* Cómo se llama una partida en todos lados: pantalla, presupuesto y Excel. */
 function etiqueta(p){
   if (!esVentana(p) || !p.num) return p.pos || (p.tipo === 'titulo' ? '' : 'Partida sin nombre');
   return 'V' + p.num + (p.pos ? ' · ' + p.pos : '');
+}
+
+/* Repasa, en una sola fila, lo que depende de la medida: la nota con la del
+   proveedor y el desglose del cajón de persiana. Se llama al escribir una
+   medida, en vez de repintar la tabla entera. */
+function notasDeMedida(i){
+  const p = datos.partidas[i];
+  const campo = document.querySelector('[data-ancho="'+i+'"]');
+  const fila = campo && campo.closest('.fila');
+  if (!fila) return;
+  const cajon = fila.querySelector('.cajon');
+  if (cajon) cajon.style.display = p.cajon && !medidaCambiada(p) ? '' : 'none';
+  let nota = fila.querySelector('.ref-medida');
+  if (!medidaCambiada(p)){ if (nota) nota.remove(); return; }
+  if (!nota){
+    nota = document.createElement('span');
+    nota.className = 'ref-prov ref-medida';
+    fila.querySelector('.medidas').before(nota);
+  }
+  nota.textContent = 'en el PDF del proveedor: ' + p.anchoProv + ' × ' + p.altoProv + ' mm';
 }
 
 const redondear = v => {
@@ -2245,17 +2323,24 @@ function pintar(){
         // número del proveedor ya no es el nuestro. Mientras van a la par
         // ("Pos. 3" y V3) decirlo es ruido
         (nota ? '<span class="ref-prov">'+esc(nota)+'</span>' : '') +
+        // la medida que traía el proveedor, solo cuando él la ha cambiado y
+        // solo en su pantalla: el día que le llame, el proveedor la tiene
+        // apuntada con la suya
+        (medidaCambiada(p) ? '<span class="ref-prov ref-medida">en el PDF del proveedor: ' +
+          p.anchoProv + ' × ' + p.altoProv + ' mm</span>' : '') +
         '<div class="medidas">'+
-        // una ventana añadida a mano no trae medidas: las escribe él
-        (p.esManual && esVentana(p)
+        /* Las medidas se escriben en TODAS las ventanas, no solo en las que
+           añade a mano: el proveedor se equivoca, y él a veces mide en obra.
+           Lo que traía el proveedor se guarda y se le enseña debajo. */
+        (esVentana(p)
           ? '<input type="number" class="mm-edit" min="0" step="1" placeholder="ancho" value="'+
               (p.ancho||'')+'" aria-label="Ancho en mm" data-ancho="'+i+'"> × ' +
             '<input type="number" class="mm-edit" min="0" step="1" placeholder="alto" value="'+
               (p.alto||'')+'" aria-label="Alto en mm" data-alto="'+i+'"> mm · '
-          : p.ancho ? p.ancho+' × '+p.alto+' mm · ' : '') +
+          : '') +
         '<input type="number" class="uds-edit" min="1" max="999" step="1" value="'+p.uds+
         '" aria-label="Unidades de '+esc(etiqueta(p))+'" data-uds="'+i+'"> ud.' +
-        (p.cajon ? '<span class="cajon">hueco total: ventana '+p.altoHoja+
+        (p.cajon && !medidaCambiada(p) ? '<span class="cajon">hueco total: ventana '+p.altoHoja+
                    ' + cajón de persiana '+p.cajon+'</span>' : '') + '</div></div>' +
       '<div class="der coste cifra' + (p.coste ? '' : ' sin-precio') + '" data-etq="Coste proveedor">' +
         '<input type="number" class="coste-edit cifra" min="0" step="0.01" value="'+
@@ -2273,6 +2358,12 @@ function pintar(){
             '" aria-label="Recortar el plano" data-plano="'+i+'"><svg width="14" height="14" viewBox="0 0 16 16" '+
             'fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">'+
             '<path d="M4 1v11h11M1 4h11v11"/></svg></button>' : '') +
+        (esVentana(p) && p.plano
+          ? '<button class="recortar" data-tip="Corregir la medida del plano"'+
+            ' aria-label="Corregir la medida del plano" data-cota="'+i+'">'+
+            '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" '+
+            'stroke-width="1.7" aria-hidden="true"><path d="M1 12h14M1 9.5v5M15 9.5v5M3 2h10v5H3z"/>'+
+            '</svg></button>' : '') +
         '<button class="duplicar" data-tip="Duplicar partida" data-dup="'+i+'">⧉</button>' +
         '<button class="quitar" data-tip="Eliminar partida" data-quitar="'+i+'">✕</button>' +
       '</div>' +
@@ -2509,7 +2600,7 @@ function descargarHoja(){
 
 const VERSION_ESTADO = 1;
 const CAMPOS_GUARDADOS = ['tipo','pos','ref','uds','udsOriginal','coste','costeTocado','pct',
-  'pvpFijo','tocada','descripcion','esCopia','esManual','ancho','alto','recorte'];
+  'pvpFijo','tocada','descripcion','esCopia','esManual','ancho','alto','recorte','cotas'];
 
 function huellaDe(d){
   return {proveedor: d.cab.proveedor || null, numProveedor: d.cab.numProveedor || null,
@@ -2588,6 +2679,20 @@ async function rehacerRecortes(){
                   {pagPlano: r.pag, cortado: false, planoAMano: true});
   }
   Object.values(lienzos).forEach(l => { l.c.width = 0; l.c.height = 0; });   // soltar memoria
+}
+
+/* Las correcciones de medidas van en proporción de la imagen, así que se
+   vuelven a pintar sobre el plano que acaba de salir del PDF aunque sus
+   píxeles no sean exactamente los de aquel día. */
+async function rehacerCotas(){
+  const lienzo = document.createElement('canvas');
+  for (const p of datos.partidas.concat(datos.quitadas.map(q => q.p))){
+    if (!p.cotas || !p.cotas.length || !p.plano) continue;
+    p.planoBase = p.plano;
+    dibujarCotas(lienzo, await cargarImagen(p.planoBase), p.cotas);
+    p.plano = lienzo.toDataURL('image/png');
+  }
+  lienzo.width = 0; lienzo.height = 0;
 }
 
 /* Leer el .xlsx sin librería. Es un ZIP: el nuestro va sin comprimir, pero si
@@ -2829,8 +2934,9 @@ function generarPDF(){
     doc.setFontSize(7.2);
     const lResto = doc.splitTextToSize(resto, anchoTexto);
     const meta = [p.color && 'Color: ' + p.color, p.herraje && 'Herraje: ' + p.herraje,
-                  p.cajon && 'Hueco ' + p.alto + ' mm (ventana ' + p.altoHoja +
-                             ' + cajón de persiana ' + p.cajon + ')',
+                  p.cajon && !medidaCambiada(p) &&
+                    'Hueco ' + p.alto + ' mm (ventana ' + p.altoHoja +
+                    ' + cajón de persiana ' + p.cajon + ')',
                   p.transmitancia && 'Transmitancia: ' + p.transmitancia].filter(Boolean).join('  ·  ');
     doc.setFontSize(7.2);
     const lMeta = doc.splitTextToSize(meta, anchoTexto);
@@ -2938,6 +3044,8 @@ async function cargar(archivos){
       p.pct = general; p.pvpFijo = null; p.tocada = false;
       p.udsOriginal = p.uds;
       p.origen = i;               // para encontrarla al reabrir desde el Excel
+      // lo que medía en el PDF del proveedor, para poder enseñárselo si lo cambia
+      p.anchoProv = p.ancho; p.altoProv = p.alto;
     });
     leido.quitadas = [];
     // solo a las ventanas: el concepto de una partida de obra ("Apertura de
@@ -2960,6 +3068,7 @@ async function cargar(archivos){
     if (estado){
       aplicarEstado(estado);
       await rehacerRecortes();
+      await rehacerCotas();
     }
     $('reabierto').classList.toggle('oculto', !estado);
     zona.classList.add('oculto');
@@ -3025,12 +3134,16 @@ $('filas').addEventListener('change', e => {
     p.uds = Math.max(1, Math.round(Number(t.value)||1));
     refrescar();
   }
-  // las medidas no cambian ningún total: no se repinta, o se perdería el foco
-  // al saltar del ancho al alto
-  if (t.dataset.ancho !== undefined)
-    datos.partidas[t.dataset.ancho].ancho = Math.round(Number(t.value)) || null;
-  if (t.dataset.alto !== undefined)
-    datos.partidas[t.dataset.alto].alto = Math.round(Number(t.value)) || null;
+  /* las medidas no cambian ningún total: no se repinta entero, o se perdería el
+     foco al saltar del ancho al alto. Solo se repasan las notas de esa fila,
+     que son las que dependen de la medida. */
+  const iMedida = t.dataset.ancho !== undefined ? t.dataset.ancho : t.dataset.alto;
+  if (iMedida !== undefined){
+    const p = datos.partidas[iMedida];
+    const v = Math.round(Number(t.value)) || null;
+    if (t.dataset.ancho !== undefined) p.ancho = v; else p.alto = v;
+    notasDeMedida(iMedida);
+  }
 });
 $('filas').addEventListener('input', e => {
   const t = e.target;
@@ -3050,10 +3163,15 @@ $('filas').addEventListener('click', e => {
   }
   const pl = e.target.closest('[data-plano]');
   if (pl){ abrirRecorte(Number(pl.dataset.plano)); return; }
+  const co = e.target.closest('[data-cota]');
+  if (co){ abrirCota(Number(co.dataset.cota)); return; }
   const dup = e.target.closest('[data-dup]');
   if (dup){
     const i = Number(dup.dataset.dup);
     const copia = Object.assign({}, datos.partidas[i]);   // el plano se comparte, es solo texto
+    // las correcciones del plano sí se copian de verdad: si se compartiera la
+    // lista, corregir la copia cambiaría también el original
+    if (copia.cotas) copia.cotas = copia.cotas.map(c => Object.assign({}, c));
     copia.udsOriginal = 0;                                // es añadida, no venía del proveedor
     copia.esCopia = true;                                 // y además es copia de otra, no nueva
     datos.partidas.splice(i + 1, 0, copia);
@@ -3190,6 +3308,9 @@ function usarRecorte(){
   // dónde recortó, en puntos: la imagen no va en el Excel, así que al reabrir
   // el plano se rehace con esto
   p.recorte = {pag: rc.pag, x: x / rc.escala, y: y / rc.escala, w: w / rc.escala, h: h / rc.escala};
+  /* Un recorte nuevo mueve el dibujo, así que las correcciones de medidas
+     apuntarían a donde no es: se tiran y se vuelven a marcar. */
+  p.cotas = []; p.planoBase = null;
   p.pagPlano = rc.pag; p.cortado = false; p.planoAMano = true;
   rc.ultimaPag = rc.pag;
   cerrarRecorte();
@@ -3201,6 +3322,717 @@ $('rc-cancelar').onclick = cerrarRecorte;
 $('rc-usar').onclick = usarRecorte;
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && !$('recorte').classList.contains('oculto')) cerrarRecorte();
+});
+
+/* ---------- EL CORRECTOR DE MEDIDAS DEL PLANO ----------
+
+   El dibujo lo hace el proveedor y lleva SU medida escrita dentro. Si Carlos
+   cambia la medida en la tabla y el plano sigue diciendo otra cosa, su cliente
+   ve dos medidas de la misma ventana y llama. Aquí marca el número que está
+   mal, escribe el bueno, y se tapa el viejo.
+
+   Se trabaja sobre el plano ya recortado —lo que va a ver el cliente—, no sobre
+   la página del proveedor, así que vale igual para los planos que son imagen
+   (Indalco) y para los que son dibujo (Cealca, Strugal).
+
+   `p.planoBase` es el plano sin correcciones y `p.cotas` las correcciones, en
+   proporción del ancho y el alto de la imagen (0 a 1). Se guardan así para
+   poder rehacerlas al reabrir desde el Excel, donde el plano se vuelve a sacar
+   del PDF y sus píxeles pueden no coincidir. */
+const ct = {i:null, sel:null, inicio:null, img:null};
+
+/* Las rayas que entran por un lado del recuadro y salen por el otro. Se miran
+   los cuatro bordes justo por fuera: si a la misma altura hay tinta a izquierda
+   y a derecha, por ahí pasa una raya y hay que devolverla. Se descartan las
+   gordas, que no son cotas sino el dibujo de la ventana. */
+function rayasQueCruzan(ctx, lienzo, caja, fondo, texto){
+  const x0 = Math.max(0, Math.round(caja.x)), y0 = Math.max(0, Math.round(caja.y));
+  const x1 = Math.min(lienzo.width, Math.round(caja.x + caja.w));
+  const y1 = Math.min(lienzo.height, Math.round(caja.y + caja.h));
+  if (x1 - x0 < 2 || y1 - y0 < 2) return [];
+  const m = 3;                                  // cuánto se mira por fuera
+  const ax = Math.max(0, x0 - m), ay = Math.max(0, y0 - m);
+  const bx = Math.min(lienzo.width, x1 + m), by = Math.min(lienzo.height, y1 + m);
+  const d = ctx.getImageData(ax, ay, bx - ax, by - ay).data;
+  const an = bx - ax;
+  const base = (fondo || 'rgb(255,255,255)').match(/\d+/g).map(Number);
+  const pixel = (px, py) => {
+    const i = ((py - ay) * an + (px - ax)) * 4;
+    return {r: d[i], g: d[i+1], b: d[i+2],
+            tinta: Math.abs(d[i]-base[0]) + Math.abs(d[i+1]-base[1]) + Math.abs(d[i+2]-base[2]) > 90};
+  };
+  const GORDA = Math.max(3, Math.round(Math.min(caja.w, caja.h) * 0.25));
+  const rayas = [];
+  const buscar = (largo, deA, aA, ladoA, ladoB, horizontal) => {
+    let k = deA;
+    while (k < aA){
+      if (!(pixel(horizontal ? ladoA : k, horizontal ? k : ladoA).tinta &&
+            pixel(horizontal ? ladoB : k, horizontal ? k : ladoB).tinta)){ k++; continue; }
+      let fin = k;
+      while (fin + 1 < aA && pixel(horizontal ? ladoA : fin+1, horizontal ? fin+1 : ladoA).tinta &&
+             pixel(horizontal ? ladoB : fin+1, horizontal ? fin+1 : ladoB).tinta) fin++;
+      const grosor = fin - k + 1;
+      /* ¿La raya pasaba de verdad por dentro, o el proveedor la interrumpe para
+         dejarle sitio al número? Se mira el original: si casi toda la franja
+         tiene tinta, la raya cruzaba y hay que devolverla (si no, el plano
+         queda con la línea partida). Si viene cortada, se deja así, o el
+         número nuevo saldría tachado. Las dos cosas las vio Mery probando. */
+      let conTinta = 0, total = 0;
+      for (let j = (horizontal ? x0 : y0); j < (horizontal ? x1 : y1); j++){
+        total++;
+        for (let g = k; g <= fin; g++)
+          if (pixel(horizontal ? j : g, horizontal ? g : j).tinta){ conTinta++; break; }
+      }
+      const cruzaba = total && conTinta / total > 0.85;
+      if (grosor <= GORDA && cruzaba){
+        const p = pixel(horizontal ? ladoA : k, horizontal ? k : ladoA);
+        const color = 'rgb(' + p.r + ',' + p.g + ',' + p.b + ')';
+        rayas.push(horizontal ? {x: x0, y: k, w: x1 - x0, h: grosor, color}
+                              : {x: k, y: y0, w: grosor, h: y1 - y0, color});
+      }
+      k = fin + 1;
+    }
+  };
+  buscar(0, y0, y1, Math.max(ax, x0 - 2), Math.min(bx - 1, x1 + 1), true);    // rayas horizontales
+  buscar(0, x0, x1, Math.max(ay, y0 - 2), Math.min(by - 1, y1 + 1), false);   // rayas verticales
+  return rayas;
+}
+
+function dibujarCotas(lienzo, img, cotas){
+  lienzo.width = img.naturalWidth; lienzo.height = img.naturalHeight;
+  const ctx = lienzo.getContext('2d');
+  ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, lienzo.width, lienzo.height);
+  ctx.drawImage(img, 0, 0);
+  (cotas || []).forEach(c => {
+    const x = c.x * lienzo.width, y = c.y * lienzo.height;
+    const w = c.w * lienzo.width, h = c.h * lienzo.height;
+    /* El número nuevo se escribe con el tamaño y en el sitio del que tapó, no
+       del recuadro: si no, marcar un poco más grande o más pequeño cambiaba la
+       letra y se notaba el parche al lado de las otras cotas. */
+    const t = c.tinta ? {x: c.tinta.x * lienzo.width, y: c.tinta.y * lienzo.height,
+                         w: c.tinta.w * lienzo.width, h: c.tinta.h * lienzo.height}
+                      : {x, y, w, h};
+    void x; void y; void w; void h;
+    /* Se tapa el número con holgura, sin llegar al recuadro entero: tapar todo
+       lo marcado borraba de paso la raya de la cota y se veía el corte. */
+    /* Poco aire: desde que el recuadro se ajusta solo a la cifra, no hacen falta
+       márgenes generosos, y con ellos se borraba lo que hubiera pegado —en un
+       plano de Indalco, la palabra "Eje" de al lado del 260—. */
+    const aire = Math.max(1.5, Math.min(t.w, t.h) * 0.10);
+    const tx = Math.max(x, t.x - aire), ty = Math.max(y, t.y - aire);
+    const tw = Math.min(x + w, t.x + t.w + aire) - tx;
+    const th = Math.min(y + h, t.y + t.h + aire) - ty;
+    /* Antes de tapar se mira qué rayas entran y salen del recuadro, para volver
+       a pintarlas después: la cota del proveedor es una raya continua que pasa
+       por detrás del número, y taparla dejaba el plano con la línea partida.
+       Solo se repintan rayas finas: el dibujo de la ventana no se toca. */
+    const rayas = rayasQueCruzan(ctx, lienzo, {x: tx, y: ty, w: tw, h: th}, c.fondo, t);
+    ctx.fillStyle = c.fondo || '#fff';
+    ctx.fillRect(tx, ty, tw, th);
+    rayas.forEach(r => { ctx.fillStyle = r.color; ctx.fillRect(r.x, r.y, r.w, r.h); });
+    // el número nuevo, del color del que se tapó: Indalco acota en azul y
+    // Cealca en negro, y un número de otro color canta enseguida
+    ctx.fillStyle = c.color || '#000'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    /* Las cotas de altura van escritas de lado. Si el recuadro que marcó es más
+       alto que ancho, es una de esas: se escribe girada, o saldría tumbada y
+       diminuta al lado de las demás. */
+    // de un toque viene decidido; marcando a mano, se deduce de la forma
+    const gira = c.gira !== undefined ? c.gira : h > w * 1.2;
+    /* El tamaño sale de DOS cuentas y se queda con la menor: lo que mide la
+       tinta que tapó y lo que cabe en el recuadro. Fiarse solo de la tinta se
+       desbocaba cuando en el recuadro caía parte del dibujo —salían números
+       enormes que rompían el plano—; fiarse solo del recuadro lo hace depender
+       de lo fino que marque. */
+    /* El tamaño lo manda LA CIFRA que tocó, cuando se sabe: su alto es el del
+       texto que escribe el proveedor, y así da igual que el número nuevo tenga
+       tres cifras o cuatro. Sin ese dato —cuando marcó a mano un recuadro— se
+       usa la mancha tapada, con el recuadro como tope. */
+    const deCifra = c.cifra ? (gira ? c.cifra.w * lienzo.width : c.cifra.h * lienzo.height) : null;
+    const grueso = deCifra || Math.min(gira ? t.w : t.h, (gira ? w : h) * 0.92);
+    const largo = gira ? h : w;
+    /* El tamaño de fuente se AJUSTA midiendo: se prueba uno, se mide lo que
+       ocupan de verdad las cifras y se corrige la proporción. Estimarlo con un
+       factor fijo dejaba el número nuevo más bajito que el del proveedor, y al
+       lado del original cantaba (los "522" de las manillas). */
+    let tam = Math.max(6, grueso * 1.32);
+    ctx.font = tam + 'px Helvetica, Arial, sans-serif';
+    const medida = ctx.measureText(c.texto);
+    const altoReal = (medida.actualBoundingBoxAscent || 0) + (medida.actualBoundingBoxDescent || 0);
+    if (altoReal > 0) tam = Math.max(6, tam * grueso / altoReal);
+    /* Se deja que el número se salga un poco de lo que ocupaba el viejo: si no,
+       cambiar un "7" por "1.200" salía ilegible de pequeño. Solo se encoge
+       cuando se pasa de largo de verdad. */
+    const cabe = Math.max(largo * 0.98, grueso * 4.5);
+    do {
+      ctx.font = tam + 'px Helvetica, Arial, sans-serif';
+      if (ctx.measureText(c.texto).width <= cabe) break;
+      tam -= 0.5;
+    } while (tam > 5);
+    ctx.save();
+    ctx.translate(tx + tw/2, ty + th/2);
+    if (gira) ctx.rotate(-Math.PI/2);
+    ctx.fillText(c.texto, 0, 0);
+    ctx.restore();
+  });
+}
+
+// Espera a que la imagen esté cargada: en un canvas no se puede dibujar antes.
+const cargarImagen = src => new Promise((ok, mal) => {
+  const img = new Image();
+  img.onload = () => ok(img); img.onerror = mal; img.src = src;
+});
+
+async function pintarCota(){
+  const p = datos.partidas[ct.i];
+  ct.img = await cargarImagen(p.planoBase);
+  dibujarCotas($('ct-canvas'), ct.img, p.cotas);
+  $('ct-deshacer').disabled = !(p.cotas && p.cotas.length);
+}
+async function abrirCota(i){
+  const p = datos.partidas[i];
+  if (!p.plano) return;
+  ct.i = i;
+  p.planoBase = p.planoBase || p.plano;      // el original, sin correcciones
+  p.cotas = p.cotas || [];
+  $('ct-titulo').textContent = 'Corrige la medida de ' + etiqueta(p);
+  ct.mascara = null;
+  $('cota').classList.remove('oculto');
+  document.body.style.overflow = 'hidden';
+  quitarSeleccionCota();
+  await pintarCota();
+}
+/* Pinta el recuadro azul sobre lo que ha encontrado, para que vea qué va a
+   cambiar antes de escribir nada. */
+function marcoSobre(sel){
+  const c = $('ct-canvas'), r = c.getBoundingClientRect(), m = $('ct-marco');
+  m.classList.remove('oculto');
+  m.style.left = (sel.x * r.width) + 'px';   m.style.top = (sel.y * r.height) + 'px';
+  m.style.width = (sel.w * r.width) + 'px';  m.style.height = (sel.h * r.height) + 'px';
+}
+const AYUDA_COTA = '<b>1.</b> Toca el número que está mal: se marca solo. ' +
+  '<b>2.</b> Escribe el bueno y pulsa <b>OK</b>. Puedes corregir tantos como quieras; ' +
+  'si algún número se resiste, márcalo arrastrando un recuadro.';
+function avisoCota(texto){
+  const a = $('ct-ayuda');
+  a.innerHTML = texto ? esc(texto) : AYUDA_COTA;
+  a.classList.toggle('avisando', !!texto);
+  $('ct-aviso').textContent = texto;          // para las pruebas
+}
+function quitarSeleccionCota(){
+  ct.sel = null; ct.inicio = null;
+  $('ct-marco').classList.add('oculto');
+  $('ct-usar').disabled = true;
+  $('ct-texto').disabled = true;
+  $('ct-texto').value = '';
+  $('ct-texto').placeholder = 'toca antes el número';
+  atajosDeMedida(false);
+}
+
+/* Los dos atajos de la barra: el ancho y el alto que tiene ahora esa ventana en
+   la tabla, que es lo que va a escribir casi siempre. */
+function atajosDeMedida(activos){
+  const p = datos.partidas[ct.i] || {};
+  [['ct-ancho', p.ancho, 'ancho'], ['ct-alto', p.alto, 'alto']].forEach(([id, valor, que]) => {
+    const b = $(id);
+    b.textContent = valor ? que + ' ' + valor : que;
+    b.disabled = !activos || !valor;
+    b.onclick = () => {
+      $('ct-texto').value = String(valor);
+      $('ct-usar').disabled = false;
+      $('ct-texto').focus();
+    };
+  });
+}
+async function cerrarCota(){
+  // si tiene un número marcado y escrito pero no ha pulsado "Poner esta medida",
+  // se pone igual: perder lo escrito al cerrar es de las cosas que más enfadan
+  if (ct.sel && $('ct-texto').value.trim()) await ponerCota();
+  const p = datos.partidas[ct.i];
+  // el plano que verá el cliente es el lienzo tal y como ha quedado
+  if (p && p.cotas && p.cotas.length) p.plano = $('ct-canvas').toDataURL('image/png');
+  else if (p && p.planoBase) p.plano = p.planoBase;
+  $('cota').classList.add('oculto');
+  document.body.style.overflow = '';
+  quitarSeleccionCota();
+  const c = $('ct-canvas'); c.width = 0; c.height = 0;     // suelta la memoria
+  ct.img = null;
+  refrescar();
+}
+function puntoEnCota(e){
+  const r = $('ct-canvas').getBoundingClientRect();
+  return {x: Math.min(Math.max(e.clientX - r.left, 0), r.width),
+          y: Math.min(Math.max(e.clientY - r.top, 0), r.height),
+          ancho: r.width, alto: r.height};
+}
+$('ct-hoja').addEventListener('pointerdown', e => {
+  if (!$('ct-canvas').width) return;
+  $('ct-hoja').setPointerCapture(e.pointerId);
+  ct.inicio = puntoEnCota(e); ct.sel = null;
+  $('ct-usar').disabled = true;
+  const m = $('ct-marco');
+  m.classList.remove('oculto');
+  m.style.left = ct.inicio.x + 'px'; m.style.top = ct.inicio.y + 'px';
+  m.style.width = '0px'; m.style.height = '0px';
+  e.preventDefault();
+});
+$('ct-hoja').addEventListener('pointermove', e => {
+  if (!ct.inicio) return;
+  const b = puntoEnCota(e), m = $('ct-marco');
+  m.style.left = Math.min(ct.inicio.x, b.x) + 'px'; m.style.top = Math.min(ct.inicio.y, b.y) + 'px';
+  m.style.width = Math.abs(b.x - ct.inicio.x) + 'px';
+  m.style.height = Math.abs(b.y - ct.inicio.y) + 'px';
+});
+$('ct-hoja').addEventListener('pointerup', e => {
+  if (!ct.inicio) return;
+  const a = ct.inicio, b = puntoEnCota(e);
+  ct.inicio = null;
+  const w = Math.abs(b.x - a.x), h = Math.abs(b.y - a.y);
+  /* Un toque: la herramienta busca el número que hay debajo. Un arrastre:
+     manda el recuadro, que es el recambio para cuando el toque no acierta. */
+  if (w < 10 && h < 10){
+    const c = $('ct-canvas');
+    const k = c.width / b.ancho;
+    if (!ct.mascara) ct.mascara = mascaraDeTinta(c);
+    const hallado = numeroTocado(ct.mascara, Math.round(b.x * k), Math.round(b.y * k));
+    if (!hallado){
+      quitarSeleccionCota();
+      avisoCota('Ahí no encuentro ningún número. Toca justo encima, o márcalo con un recuadro.');
+      return;
+    }
+    ct.sel = hallado;
+    marcoSobre(hallado);
+  } else if (w < 10 || h < 6){
+    quitarSeleccionCota(); return;              // un arrastre demasiado fino
+  } else {
+    ct.sel = {x: Math.min(a.x, b.x) / b.ancho, y: Math.min(a.y, b.y) / b.alto,
+              w: w / b.ancho, h: h / b.alto};
+  }
+  avisoCota('');
+  /* El campo se queda VACÍO a propósito. La herramienta no puede leer el número
+     que hay dentro del recuadro —el plano es un dibujo—, así que proponer uno
+     era peor: en los planos con medidas parciales (835, 850...) proponía el
+     ancho de la ventana y parecía que no cogía lo marcado. Los atajos de al
+     lado ponen el ancho o el alto de un toque. */
+  const sel = ct.sel;
+  $('ct-texto').disabled = false;
+  $('ct-texto').placeholder = 'escribe la medida';
+  $('ct-texto').value = '';
+  $('ct-usar').disabled = true;
+  atajosDeMedida(true);
+  $('ct-texto').focus();
+});
+$('ct-hoja').addEventListener('pointercancel', () => { ct.inicio = null; });
+$('ct-texto').addEventListener('input', () => {
+  $('ct-usar').disabled = !ct.sel || !$('ct-texto').value.trim();
+});
+$('ct-texto').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !$('ct-usar').disabled){ e.preventDefault(); ponerCota(); }
+});
+/* Mira los píxeles del recuadro marcado: el color que más se repite es el
+   fondo, y el más oscuro, la tinta del número. Así la corrección sale del mismo
+   color que el resto de las cotas, sea el proveedor que sea. */
+function coloresDe(lienzo, sel){
+  const x = Math.floor(sel.x * lienzo.width), y = Math.floor(sel.y * lienzo.height);
+  const w = Math.max(1, Math.floor(sel.w * lienzo.width));
+  const h = Math.max(1, Math.floor(sel.h * lienzo.height));
+  const d = lienzo.getContext('2d').getImageData(x, y, w, h).data;
+  const cuenta = {};
+  for (let i = 0; i < d.length; i += 4)
+    cuenta[d[i] + ',' + d[i+1] + ',' + d[i+2]] = (cuenta[d[i] + ',' + d[i+1] + ',' + d[i+2]] || 0) + 1;
+  const orden = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a]);
+  const fondo = orden[0].split(',').map(Number);
+  const lejania = v => Math.abs(v[0]-fondo[0]) + Math.abs(v[1]-fondo[1]) + Math.abs(v[2]-fondo[2]);
+  /* La tinta es el NÚCLEO del trazo: la media de los píxeles más alejados del
+     fondo. Quedarse con el color que más se repite daba tonos del suavizado
+     —un "rgb(0,6,0)" en vez de negro— y el número salía de otro color. */
+  let masLejos = 0;
+  orden.forEach(c => { const l = lejania(c.split(',').map(Number)); if (l > masLejos) masLejos = l; });
+  let r = 0, g = 0, b = 0, n = 0;
+  orden.forEach(c => {
+    const v = c.split(',').map(Number);
+    if (lejania(v) < masLejos * 0.8) return;
+    r += v[0] * cuenta[c]; g += v[1] * cuenta[c]; b += v[2] * cuenta[c]; n += cuenta[c];
+  });
+  const tinta = n ? [Math.round(r/n), Math.round(g/n), Math.round(b/n)] : null;
+  return {fondo: 'rgb(' + fondo.join(',') + ')',
+          color: tinta && masLejos > 90 ? 'rgb(' + tinta.join(',') + ')' : '#000'};
+}
+
+/* ---- Tocar el número en vez de encuadrarlo ----
+
+   Encuadrar una cifra con el dedo, en obra, es pedir demasiado: o se queda
+   corto y asoma media cifra, o se pasa y el número nuevo sale de otro tamaño.
+   Con un toque, la herramienta mira SOLO debajo del dedo: coge la mancha de
+   tinta que hay ahí y la extiende a la cifra entera. Mirar en un sitio
+   concreto acierta mucho más que buscar números por todo el plano, que se deja
+   la mitad y se inventa otros (probado: encontraba un tercio).
+
+   La máscara se calcula una vez por plano y se guarda: en un plano de 1.500 px
+   son unos cuantos millones de píxeles y no conviene repetirlo a cada toque. */
+function mascaraDeTinta(lienzo){
+  const W = lienzo.width, H = lienzo.height;
+  const d = lienzo.getContext('2d').getImageData(0, 0, W, H).data;
+  const cuenta = {};
+  for (let i = 0; i < d.length; i += 4)
+    cuenta[d[i]+','+d[i+1]+','+d[i+2]] = (cuenta[d[i]+','+d[i+1]+','+d[i+2]] || 0) + 1;
+  const fondo = Object.keys(cuenta).sort((a,b)=>cuenta[b]-cuenta[a])[0].split(',').map(Number);
+  const tinta = new Uint8Array(W*H);
+  for (let p = 0; p < W*H; p++){
+    const i = p*4;
+    tinta[p] = Math.abs(d[i]-fondo[0]) + Math.abs(d[i+1]-fondo[1]) + Math.abs(d[i+2]-fondo[2]) > 90 ? 1 : 0;
+  }
+  /* Se borran las rayas: una raya es una tirada larga de tinta seguida. Las
+     cifras se tocan con las rayas de su cota, y sin quitarlas el número y su
+     raya son una sola mancha que ocupa medio plano. */
+  const largoH = Math.max(12, Math.round(W * 0.12)), largoV = Math.max(12, Math.round(H * 0.12));
+  const barrer = (largo, n, m, indice) => {
+    for (let a2 = 0; a2 < n; a2++){
+      let ini = -1;
+      for (let b2 = 0; b2 <= m; b2++){
+        const hay = b2 < m && tinta[indice(a2, b2)];
+        if (hay && ini < 0) ini = b2;
+        if (!hay && ini >= 0){
+          if (b2 - ini >= largo) for (let k = ini; k < b2; k++) tinta[indice(a2, k)] = 0;
+          ini = -1;
+        }
+      }
+    }
+  };
+  barrer(largoH, H, W, (y, x) => y*W + x);
+  barrer(largoV, W, H, (x, y) => y*W + x);
+  return {tinta, W, H};
+}
+
+/* La cifra que hay bajo el punto, extendida al número entero. Devuelve la caja
+   en proporción de la imagen, o null si ahí no había nada.
+
+   Se trabaja con manchas enteras, no estirando píxel a píxel: se coge la cifra
+   que hay bajo el dedo y se le juntan las manchas de al lado **que midan como
+   ella** y estén a la altura. Estirar por píxeles se enganchaba a las flechas y
+   a las marcas de la cota, y en los números pequeños cogía media ventana. */
+function numeroTocado(mask, px, py){
+  const {tinta, W, H} = mask;
+  const visto = new Uint8Array(W*H);
+
+  // la mancha que toca un píxel dado
+  const mancha = (inicio) => {
+    const pila = [inicio];
+    visto[inicio] = 1;
+    let x0 = inicio%W, x1 = x0, y0 = (inicio/W)|0, y1 = y0, n = 0;
+    while (pila.length){
+      const p = pila.pop(), cx = p%W, cy = (p/W)|0;
+      n++;
+      if (cx < x0) x0 = cx; if (cx > x1) x1 = cx;
+      if (cy < y0) y0 = cy; if (cy > y1) y1 = cy;
+      [[1,0],[-1,0],[0,1],[0,-1]].forEach(([dx, dy]) => {
+        const nx = cx+dx, ny = cy+dy;
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) return;
+        const q = ny*W + nx;
+        if (!visto[q] && tinta[q]){ visto[q] = 1; pila.push(q); }
+      });
+    }
+    return {x0, y0, x1, y1, an: x1-x0+1, al: y1-y0+1, n};
+  };
+
+  // la cifra bajo el dedo: la tinta más cercana al punto
+  const radio = Math.max(6, Math.round(Math.min(W, H) * 0.04));
+  let semilla = -1, mejor = 1e9;
+  for (let y = Math.max(0, py-radio); y < Math.min(H, py+radio); y++)
+    for (let x = Math.max(0, px-radio); x < Math.min(W, px+radio); x++)
+      if (tinta[y*W+x]){
+        const d2 = (x-px)*(x-px) + (y-py)*(y-py);
+        if (d2 < mejor){ mejor = d2; semilla = y*W + x; }
+      }
+  if (semilla < 0) return null;
+  const cero = mancha(semilla);
+
+  // las manchas que hay alrededor, en una ventana holgada
+  const margen = Math.max(cero.an, cero.al) * 6;
+  const ax = Math.max(0, Math.round(cero.x0 - margen)), bx = Math.min(W, Math.round(cero.x1 + margen));
+  const ay = Math.max(0, Math.round(cero.y0 - margen)), by = Math.min(H, Math.round(cero.y1 + margen));
+  const vecinas = [];
+  for (let y = ay; y < by; y++)
+    for (let x = ax; x < bx; x++){
+      const p = y*W + x;
+      if (tinta[p] && !visto[p]) vecinas.push(mancha(p));
+    }
+
+  /* Se juntan las que parecen cifras del mismo número: del mismo tamaño que la
+     tocada, a la misma altura y a menos de una cifra de distancia. Así una
+     marca de la cota (finísima) o una flecha (larguísima) se quedan fuera. */
+  /* Una cifra llena bastante su caja y no es ni un pelo ni una raya. Se le pide
+     a TODAS las manchas que se juntan, no solo a la primera: tocando la manilla
+     de la ventana, que son varios trocitos alargados en columna, se tomaba por
+     un número escrito de lado y escribía ahí. */
+  /* Y un tamaño mínimo: las marquitas de las cotas (dos píxeles) pasaban el
+     filtro y el número corregido salía diminuto, como una mosca al lado de los
+     demás. Una cifra ocupa al menos el 1,2 % del plano. */
+  const minimo = Math.max(3, Math.round(Math.min(W, H) * 0.012));
+  const pareceGlifo = m => {
+    const relleno = m.n / (m.an * m.al), proporcion = m.an / m.al;
+    /* La proporción se mide con mano dura solo aquí, en la mancha que se toca:
+       un trozo de marco, fino y alto, pasaba por cifra y la corrección se
+       escribía encima del dibujo. Un "1" suelto también se queda fuera, pero no
+       importa: al tocarlo se junta con las otras cifras del número y entonces
+       ya no se le pide esto. */
+    return Math.min(m.an, m.al) >= 2 && Math.max(m.an, m.al) >= minimo &&
+           relleno >= 0.22 && proporcion >= 0.3 && proporcion <= 3.3;
+  };
+  /* Para las cifras que se JUNTAN se pide menos: el "1" de un número pequeño
+     mide un píxel de ancho y el filtro de arriba lo tomaba por una raya, así
+     que "1075" se corregía a medias. Aquí ya sabemos que estamos dentro de un
+     número —la primera mancha sí pasó el filtro bueno— y basta con que tenga la
+     altura de sus compañeras y algo de cuerpo. */
+  const pareceCifraPegada = m => m.n / (m.an * m.al) >= 0.22 && m.an / m.al <= 5;
+  const juntar = (horizontal) => {
+    const g = {x0: cero.x0, y0: cero.y0, x1: cero.x1, y1: cero.y1, piezas: 1};
+    // el tamaño de la letra: el alto si el número va en fila, el ancho si va de
+    // lado (una cifra girada se dibuja tumbada)
+    const tam = horizontal ? cero.al : cero.an;
+    /* El hueco bueno lo dice el propio número: entre sus cifras hay un hueco
+       pequeño y parejo, y el espacio hasta la palabra de al lado es varias
+       veces mayor. Un umbral fijo no vale —cada proveedor escribe con su
+       espaciado—: con uno pequeño se partía el "1.300" de Strugal, y con uno
+       grande se llevaba media palabra ("260 Eje" → "300 je"). */
+    /* Si la mancha tocada ya es ancha, es que las cifras del número van pegadas
+       y se leyeron como una sola: entonces casi no hay que juntar nada, y se
+       exige mucha menos distancia. Así "260 Eje" deja de tragarse la "E". */
+    const yaEsElNumero = horizontal ? cero.an > cero.al * 1.6 : cero.al > cero.an * 1.6;
+    let umbral = tam * (yaEsElNumero ? 0.25 : 0.8);
+    let creció = true;
+    while (creció){
+      creció = false;
+      const cabe = [];
+      vecinas.forEach(v => {
+        if (v.usada) return;
+        const medida = horizontal ? v.al / cero.al : v.an / cero.an;
+        // las cifras de un mismo número miden casi lo mismo; con manga ancha se
+        // colaba la flecha de al lado, que es más alta, y el grupo dejaba de
+        // parecer un número ("1075" se corregía a medias)
+        if (medida < 0.5 || medida > 1.75) return;
+        if (!pareceCifraPegada(v)) return;                          // ni parece letra ni número
+        const solapa = horizontal
+          ? Math.min(g.y1, v.y1) - Math.max(g.y0, v.y0) > Math.min(g.y1-g.y0, v.al) * 0.45
+          : Math.min(g.x1, v.x1) - Math.max(g.x0, v.x0) > Math.min(g.x1-g.x0, v.an) * 0.45;
+        if (!solapa) return;
+        const hueco = horizontal
+          ? (v.x0 > g.x1 ? v.x0 - g.x1 : (g.x0 > v.x1 ? g.x0 - v.x1 : 0))
+          : (v.y0 > g.y1 ? v.y0 - g.y1 : (g.y0 > v.y1 ? g.y0 - v.y1 : 0));
+        if (hueco <= umbral) cabe.push({v, hueco});
+      });
+      if (!cabe.length) break;
+      cabe.sort((a, b) => a.hueco - b.hueco);
+      const {v, hueco} = cabe[0];
+      // el primer hueco marca la pauta: lo que venga a más del doble ya es otra cosa
+      /* El suelo del 0,3 no es capricho: si las dos primeras cifras se tocan, el
+         primer hueco vale 0 y el umbral se quedaba en nada, así que el número
+         se corregía a medias ("1075" acababa como "hh75"). */
+      if (g.piezas === 1) umbral = Math.max(hueco * 2.2, tam * 0.3);
+      v.usada = true; creció = true;
+      g.x0 = Math.min(g.x0, v.x0); g.y0 = Math.min(g.y0, v.y0);
+      g.x1 = Math.max(g.x1, v.x1); g.y1 = Math.max(g.y1, v.y1);
+      g.piezas++;
+    }
+    vecinas.forEach(v => { v.usada = false; });
+    return g;
+  };
+
+  const enFila = juntar(true), enColumna = juntar(false);
+  // gana la que junte más cifras; en empate, la de siempre: escrito en horizontal
+  /* Un número no engorda: escrito en fila, su alto es el de una cifra; escrito
+     en columna, su ancho es el de una cifra. Si el grupo se sale de ahí, es que
+     ha ido juntando cosas del dibujo —tocando la etiqueta "GUARDIAN SUN" se
+     bajaba por media ventana—, y no vale. */
+  /* Y lo más evidente, que se nos escapó: un número de varias cifras escrito en
+     fila es más ancho que alto, y escrito de lado, más alto que ancho. Sin esto
+     un grupo de 18 x 10 px se daba por vertical y el número salía girado. */
+  const vale = (g, horizontal) => {
+    const an = g.x1 - g.x0 + 1, al = g.y1 - g.y0 + 1;
+    if (g.piezas > 1 && (horizontal ? an < al : al < an)) return false;
+    return horizontal ? al <= cero.al * 2 && an <= cero.an * 9
+                      : an <= cero.an * 2 && al <= cero.al * 9;
+  };
+  const filaVale = vale(enFila, true), columnaVale = vale(enColumna, false);
+  /* ¿Lo que tocó parece una cifra? Una cifra llena bastante su caja y no es ni
+     un pelo ni una raya. Si no lo parece y encima no ha juntado a nadie, es que
+     ha tocado una raya o un trozo del dibujo: mejor decirlo que borrarlo. */
+  const pareceCifra = pareceGlifo(cero);
+  let gira = columnaVale && (!filaVale || enColumna.piezas > enFila.piezas);
+  let g = gira ? enColumna : enFila;
+  if (!filaVale && !columnaVale){          // ninguna vale: solo la cifra tocada
+    g = {x0: cero.x0, y0: cero.y0, x1: cero.x1, y1: cero.y1, piezas: 1};
+    gira = false;
+  }
+  /* Con una sola mancha se escribe en HORIZONTAL, que es como van casi todas
+     las cotas. Se probó a deducirlo de su forma —de pie es más alta que ancha—
+     y salió mal: al tocar un número con flecha debajo, la semilla era un trozo
+     de la flecha y el número acababa escrito de lado. Mejor acertar en lo
+     común: si hace falta, el arrastre a mano manda. */
+  if (g.piezas === 1) gira = false;
+  if (!pareceCifra && g.piezas === 1) return null;      // eso no era un número
+  /* La orientación se decide aquí y viaja con la corrección: por la forma de la
+     caja no se puede, porque UNA cifra suelta siempre es más alta que ancha y
+     el "7" de una esquina salía escrito de lado y diminuto. */
+  return {x: g.x0/W, y: g.y0/H, w: (g.x1-g.x0+1)/W, h: (g.y1-g.y0+1)/H,
+          cifra: {w: cero.an/W, h: cero.al/H}, gira};
+}
+
+/* Ajusta el recuadro al número entero y devuelve dónde está su tinta.
+
+   Marcar justo es imposible con el dedo en obra, y quedarse corto se paga
+   caro: queda un trozo del número viejo al lado del nuevo ("900" junto a un
+   "5" suelto). Así que se crece el recuadro mientras siga habiendo tinta
+   pegada, hasta encontrar un hueco limpio de fondo. Con eso el número se
+   corrige entero aunque él lo marque a ojo. */
+function ajustarATinta(lienzo, sel){
+  const W = lienzo.width, H = lienzo.height;
+  const x0 = Math.max(0, Math.floor(sel.x * W)), y0 = Math.max(0, Math.floor(sel.y * H));
+  const x1 = Math.min(W, Math.ceil((sel.x + sel.w) * W));
+  const y1 = Math.min(H, Math.ceil((sel.y + sel.h) * H));
+  // se mira una zona más ancha, que es por donde se puede crecer
+  /* Cuánto se le deja crecer: el tamaño de lo que marcó por cada lado, y nunca
+     más. Sin tope, en las cotas de altura el recuadro se enganchaba a la raya
+     de la cota —que es larguísima— y acababa tapando medio plano. */
+  const anchoSel = Math.max(4, x1 - x0), altoSel = Math.max(4, y1 - y0);
+  const holgura = 0.4;            // se le deja crecer un 40 % por cada lado
+  const ax = Math.max(0, Math.round(x0 - anchoSel * holgura));
+  const ay = Math.max(0, Math.round(y0 - altoSel * holgura));
+  const bx = Math.min(W, Math.round(x1 + anchoSel * holgura));
+  const by = Math.min(H, Math.round(y1 + altoSel * holgura));
+  const d = lienzo.getContext('2d').getImageData(ax, ay, bx - ax, by - ay).data;
+  const an = bx - ax;
+  const cuenta = {};
+  for (let i = 0; i < d.length; i += 4)
+    cuenta[d[i] + ',' + d[i+1] + ',' + d[i+2]] = (cuenta[d[i] + ',' + d[i+1] + ',' + d[i+2]] || 0) + 1;
+  const fondo = Object.keys(cuenta).sort((a, b) => cuenta[b] - cuenta[a])[0].split(',').map(Number);
+  const hayTinta = (px, py) => {
+    const i = ((py - ay) * an + (px - ax)) * 4;
+    return Math.abs(d[i] - fondo[0]) + Math.abs(d[i+1] - fondo[1]) + Math.abs(d[i+2] - fondo[2]) > 90;
+  };
+  const columna = (px, de, a) => { for (let py = de; py < a; py++) if (hayTinta(px, py)) return true; return false; };
+  const fila = (py, de, a) => { for (let px = de; px < a; px++) if (hayTinta(px, py)) return true; return false; };
+  let iz = x0, de = x1, ar = y0, ab = y1;
+  /* Entre cifra y cifra hay un hueco de fondo, así que crecer solo mientras
+     haya tinta se paraba en el primer hueco y dejaba media cifra fuera: "900"
+     escrito al lado de un "5" suelto. Por eso se mira un poco más allá antes
+     de darse por vencido; el salto es más corto que la altura del texto, para
+     no comerse la cota de al lado. */
+  /* Cuánto hueco se salta: algo menos que el lado corto de lo marcado, que es
+     del orden del hueco entre cifras. Con el lado largo se saltaba de la cifra
+     a la raya de al lado y el recuadro se desbocaba. */
+  const salto = Math.max(3, Math.round(Math.min(anchoSel, altoSel) * 0.6));
+  const saltoV = salto;
+  const hueco = (mirar, desde, paso, tope) => {
+    for (let k = 1; k <= tope; k++){
+      const v = desde + paso * k;
+      if (v < ax || v >= bx) break;
+      if (mirar(v)) return v;
+    }
+    return null;
+  };
+  for (let vueltas = 0; vueltas < 40; vueltas++){
+    const antes = [iz, de, ar, ab].join();
+    while (iz > ax && columna(iz - 1, ar, ab)) iz--;
+    while (de < bx && columna(de, ar, ab)) de++;
+    while (ar > ay && fila(ar - 1, iz, de)) ar--;
+    while (ab < by && fila(ab, iz, de)) ab++;
+    // ¿sigue la cifra un poco más allá del hueco?
+    const sigueIz = hueco(px => px >= ax && columna(px, ar, ab), iz, -1, salto);
+    if (sigueIz !== null) iz = sigueIz;
+    const sigueDe = hueco(px => px < bx && columna(px, ar, ab), de - 1, 1, salto);
+    if (sigueDe !== null) de = sigueDe + 1;
+    const sigueAr = ar > ay && hueco(py => py >= ay && fila(py, iz, de), ar, -1, saltoV);
+    if (sigueAr !== null && sigueAr !== false && sigueAr >= ay) ar = sigueAr;
+    const sigueAb = ab < by && hueco(py => py < by && fila(py, iz, de), ab - 1, 1, saltoV);
+    if (sigueAb !== null && sigueAb !== false && sigueAb < by) ab = sigueAb + 1;
+    iz = Math.max(iz, ax); de = Math.min(de, bx);
+    ar = Math.max(ar, ay); ab = Math.min(ab, by);
+    if ([iz, de, ar, ab].join() === antes) break;
+  }
+  // dónde está de verdad la tinta dentro de lo que ha quedado: de ahí salen el
+  // tamaño de letra y el centro, para que el número nuevo caiga donde el viejo
+  /* Las rayas de la cota se ignoran al medir el número. Una raya cruza el
+     recuadro de lado a lado; una cifra no llega ni a la mitad. Sin esto, al
+     marcar con holgura la raya entraba en la cuenta, el número salía gigante y
+     la pastilla blanca tapaba medio dibujo. */
+  const altoCaja = ab - ar, anchoCaja = de - iz;
+  const colLarga = [], filLarga = [];
+  for (let px = iz; px < de; px++){
+    let n = 0;
+    for (let py = ar; py < ab; py++) if (hayTinta(px, py)) n++;
+    colLarga[px] = n > altoCaja * 0.8;
+  }
+  for (let py = ar; py < ab; py++){
+    let n = 0;
+    for (let px = iz; px < de; px++) if (hayTinta(px, py)) n++;
+    filLarga[py] = n > anchoCaja * 0.8;
+  }
+  let tx0 = de, ty0 = ab, tx1 = iz, ty1 = ar;
+  for (let py = ar; py < ab; py++){
+    if (filLarga[py]) continue;
+    for (let px = iz; px < de; px++){
+      if (colLarga[px]) continue;
+      if (hayTinta(px, py)){
+        if (px < tx0) tx0 = px; if (px > tx1) tx1 = px;
+        if (py < ty0) ty0 = py; if (py > ty1) ty1 = py;
+      }
+    }
+  }
+  if (tx1 < tx0){ tx0 = iz; tx1 = de; ty0 = ar; ty1 = ab; }      // no había tinta
+  /* La tinta manda el tamaño de letra y el sitio, pero se le pone tope: en las
+     cotas de altura la raya de la cota toca al número, y sin tope el texto
+     salía gigante y la pastilla blanca tapaba medio dibujo. */
+  let tw = Math.min(tx1 - tx0 + 1, anchoSel * 1.6), th = Math.min(ty1 - ty0 + 1, altoSel * 1.6);
+  const cx = (tx0 + tx1) / 2, cy = (ty0 + ty1) / 2;
+  return {x: iz / W, y: ar / H, w: (de - iz) / W, h: (ab - ar) / H,
+          tinta: {x: (cx - tw/2) / W, y: (cy - th/2) / H, w: tw / W, h: th / H}};
+}
+
+async function ponerCota(){
+  const texto = $('ct-texto').value.trim();
+  if (!ct.sel || !texto) return;
+  /* Si viene de un toque, la caja ya es la del número entero y NO se vuelve a
+     ajustar: el ajuste está pensado para un recuadro marcado a ojo, y encima de
+     una caja buena se comía lo de al lado —al tocar la etiqueta "GUARDIAN SUN"
+     se tragaba las rayas del marco y borraba medio dibujo—. */
+  const ajustada = ct.sel.cifra
+    ? Object.assign({}, ct.sel, {tinta: {x: ct.sel.x, y: ct.sel.y, w: ct.sel.w, h: ct.sel.h}})
+    : ajustarATinta($('ct-canvas'), ct.sel);
+  /* El color de la tinta se mira en lo que marcó ÉL, no en el recuadro ya
+     ajustado: al crecer, el recuadro se come la raya de la cota —que suele ser
+     negra— y un número azul acababa reescrito en negro. El fondo sí se mira en
+     el recuadro entero, que es más fiable. */
+  /* El fondo se mira en una zona MÁS GRANDE que el número. Mirándolo dentro de
+     la caja justa, lo que más se repite es la tinta y el fondo salía negro: la
+     corrección quedaba como una pastilla negra con letras blancas. */
+  const holgado = {x: Math.max(0, ajustada.x - ajustada.w * 0.6),
+                   y: Math.max(0, ajustada.y - ajustada.h * 0.6),
+                   w: Math.min(1, ajustada.w * 2.2), h: Math.min(1, ajustada.h * 2.2)};
+  const fondo = coloresDe($('ct-canvas'), holgado).fondo;
+  let color = coloresDe($('ct-canvas'), ct.sel).color;
+  /* Último seguro: si el color que sale se parece al del fondo con el que se
+     tapa, el número quedaría escrito en invisible —borrado y sin nada—. Pasaba
+     al tocar zonas con relleno claro, como los cristales. En ese caso, negro. */
+  const luz = c2 => { const v = c2.match(/\d+/g).map(Number);
+    return 0.299*v[0] + 0.587*v[1] + 0.114*v[2]; };
+  // si el número quedaría demasiado claro sobre el fondo, se escribe en oscuro:
+  // da igual que el trazo original fuera gris, lo que no vale es no verlo
+  if (Math.abs(luz(color) - luz(fondo)) < 90) color = '#152530';
+  datos.partidas[ct.i].cotas.push(Object.assign({texto}, ajustada, {fondo, color}));
+  quitarSeleccionCota();
+  ct.mascara = null;              // el plano ha cambiado: la máscara ya no vale
+  await pintarCota();
+}
+$('ct-usar').onclick = ponerCota;
+$('ct-deshacer').onclick = async () => {
+  const p = datos.partidas[ct.i];
+  p.cotas.pop();
+  quitarSeleccionCota();
+  await pintarCota();
+};
+$('ct-cerrar').onclick = cerrarCota;
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('cota').classList.contains('oculto')) cerrarCota();
 });
 
 $('add-ventana').onclick = () => añadirPartida('ventana');
