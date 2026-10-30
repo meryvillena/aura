@@ -346,7 +346,7 @@ input#t-dtopct{width:58px;padding:3px 6px;font-size:13px;text-align:right;
   <!-- Para saber de un vistazo si el navegador tiene la última versión o una
        copia guardada de antes. Sin esto no hay forma de distinguirlo, y ya nos
        costó una tarde: se estuvo probando una versión vieja sin saberlo. -->
-  <p class="version">Versión del <span id="version">30/09/2026</span> ·
+  <p class="version">Versión del <span id="version">30/10/2026</span> ·
      si te falla algo, recarga con <b>Cmd + Shift + R</b> antes de nada</p>
   <div id="error" class="error oculto"></div>
 
@@ -1727,6 +1727,78 @@ const PROVEEDORES = [
 }
 ,
 {
+  /* Presupuestos con marca blanca ("AURA" en la cabecera): una tabla de
+     "Nº · GRÁFICO · DESCRIPCIÓN" y debajo de cada descripción "NºUD. · PVP/UD. ·
+     TOTAL". No hay "Pos." ni "UDS:". Cada partida empieza en el número suelto
+     de la columna Nº (el primer trozo, a la izquierda, y en la MISMA línea que
+     la primera línea de la descripción) y cierra en la línea de cifras que sigue
+     a "NºUD.". El plano se recorta de la página renderizada. */
+  id: 'aura', nombre: 'Presupuesto marca blanca (EIRA)',
+  detectar: t => /NºUD\.\s*PVP\/UD\.\s*TOTAL/.test(t) && /Presupuesto\s+n[úu]mero/i.test(t),
+  cabecera: t => ({
+    numProveedor: ((t.match(/Presupuesto\s+n[úu]mero:?[ \t]*([\w\/]+)/i)||[])[1] || ''),
+    fecha: ((t.match(/Fecha:[ \t]*(\d{2})-(\d{2})-(\d{4})/)||[]).slice(1).join('/')),
+    obra:  ((t.match(/Obra:[ \t]*(.*)/)||[])[1] || '').trim(),
+    referencia: ''
+  }),
+  base: t => { const m = t.match(/TOTAL BRUTO[^\d]{0,20}([\d.,]+)/); return m ? num(m[1]) : null; },
+
+  bloques(lineas){
+    const esCab = l => l.trozos[0].x < 40 && /^\d{1,3}$/.test(l.trozos[0].t.trim());
+    const pares = [];
+    lineas.forEach((h, i) => {
+      if (!esCab(h)) return;
+      const k = lineas.findIndex((l, j) => j > i && /^NºUD\./.test(l.t));
+      if (k < 0 || (lineas.slice(i+1, k).some(esCab))) return;
+      if (lineas[k+1]) pares.push({h, cierre: lineas[k+1], nUD: lineas[k]});
+    });
+    return pares;
+  },
+
+  partida({h, cierre, dentro, trozos, pagina, lienzo, imgs, yCierre}){
+    const basura = t => /^(NºUD\.|Presupuesto n|Nº\s+GRÁFICO|Página\s)/i.test(t);
+    const lineasDesc = [unir(h.trozos.filter(s => s.x >= 100))]
+      .concat(dentro.filter(l => l !== cierre && !basura(l.t))
+                    .map(l => unir(l.trozos.filter(s => s.x >= 100 && s.x < 330))));
+    const textos = lineasDesc.filter(Boolean);
+    const medida = textos.find(t => /^Medida:/i.test(t)) || '';
+    const unaSola = textos.filter(t => !/^Medida:/i.test(t)).join(' ').replace(/\s+/g,' ');
+
+    const p = {pos: 'Pos. ' + h.trozos[0].t.trim()};
+    const md = medida.match(/([\d.]+)\s*x\s*([\d.]+)(?:\s*\+\s*([\d.]+))?/i);
+    p.ancho    = md ? mm(md[1]) : null;
+    p.altoHoja = md ? mm(md[2]) : null;
+    p.cajon    = md && md[3] ? mm(md[3]) : null;
+    p.alto     = p.altoHoja ? p.altoHoja + (p.cajon || 0) : null;
+    p.color = ((unaSola.match(/\bserie\s+.*?\ben\s+([^,.]+)/i)||[])[1] || '')
+                .replace(/\s+compuesto\b.*$/i,'').trim();
+    p.herraje = '';
+    p.transmitancia = '';
+    p.descripcion = textos.filter(t => !/^Medida:/i.test(t));
+
+    p.uds = parseInt((cierre.trozos.find(s => s.x > 320 && s.x < 390)||{t:'1'}).t) || 1;
+    // El precio unitario trae cuatro decimales ("452,9967") y el total va
+    // redondeado ("453,00"). La base imponible del proveedor es la suma de los
+    // totales, así que se parte del total: con los unitarios cuadraba por céntimos.
+    const sTotal = cierre.trozos.filter(s => s.x > 470).pop();
+    p.coste = sTotal ? (num(sTotal.t) || 0) / p.uds : 0;
+    if (!p.coste && !p.ancho) return null;      // "NO INCLUYE MONTAJE": una nota a 0 €
+
+    /* El plano NO es la imagen incrustada: esa es solo el relleno azul del cristal
+       (una o dos por ventana). El marco y las líneas de apertura son dibujo
+       vectorial. Se recorta la celda "GRÁFICO" de la página renderizada: va de
+       10 pt sobre la línea base del número a 80 pt bajo ella (filas de 90 pt),
+       y de lado queda dentro de los filetes (que bailan 2,5 pt entre páginas). */
+    const rec = lienzo ? recortarConTinta(lienzo, {x: 43, ancho: 92, arriba: h.y - 8, altoImg: 86}) : null;
+    p.plano   = rec ? rec.url : null;
+    p.aspecto = rec ? rec.aspecto : 0.81;
+    p.anchoPt = rec ? rec.anchoPt : null;
+    p.altoPt  = rec ? rec.altoPt  : null;
+    p.rect    = rec ? rec.rect : null;
+    return p;
+  }
+},
+{
   /* Último recurso. Si ninguno de los de arriba encaja, se intenta leer el PDF
      con lo que tienen en común los presupuestos de este sector: cada ventana
      empieza en "Pos." y cierra en "UDS:".
@@ -1898,7 +1970,7 @@ async function leerPDF(buffer){
     const base = regla.base(p.texto);
     if (base != null){
       totales.base = base;
-      const mIva = p.texto.match(/I\.V\.A\.?\s*\(?\s*(\d+)/);
+      const mIva = p.texto.match(/(\d+)\s*%\s*I\.V\.A/) || p.texto.match(/I\.V\.A\.?\s*\(?\s*(\d+)/);
       if (mIva) totales.iva = parseInt(mIva[1]);
     }
   }
