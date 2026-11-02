@@ -346,7 +346,7 @@ input#t-dtopct{width:58px;padding:3px 6px;font-size:13px;text-align:right;
   <!-- Para saber de un vistazo si el navegador tiene la última versión o una
        copia guardada de antes. Sin esto no hay forma de distinguirlo, y ya nos
        costó una tarde: se estuvo probando una versión vieja sin saberlo. -->
-  <p class="version">Versión del <span id="version">30/10/2026</span> ·
+  <p class="version">Versión del <span id="version">02/11/2026</span> ·
      si te falla algo, recarga con <b>Cmd + Shift + R</b> antes de nada</p>
   <div id="error" class="error oculto"></div>
 
@@ -1768,13 +1768,15 @@ const PROVEEDORES = [
     const md = medida.match(/([\d.]+)\s*x\s*([\d.]+)(?:\s*\+\s*([\d.]+))?/i);
     p.ancho    = md ? mm(md[1]) : null;
     p.altoHoja = md ? mm(md[2]) : null;
-    p.cajon    = md && md[3] ? mm(md[3]) : null;
-    p.alto     = p.altoHoja ? p.altoHoja + (p.cajon || 0) : null;
+    // Aquí NO se suma el cajón (decisión de Mery, 2-nov-2026): "611 x 930 + 185"
+    // se queda como 611 x 930 y el "+ 185" viaja en la línea "Medida:" del texto
+    p.cajon    = null;
+    p.alto     = p.altoHoja;
     p.color = ((unaSola.match(/\bserie\s+.*?\ben\s+([^,.]+)/i)||[])[1] || '')
                 .replace(/\s+compuesto\b.*$/i,'').trim();
     p.herraje = '';
     p.transmitancia = '';
-    p.descripcion = textos.filter(t => !/^Medida:/i.test(t));
+    p.descripcion = textos;           // todo lo que escribe el proveedor, la línea Medida: incluida
 
     p.uds = parseInt((cierre.trozos.find(s => s.x > 320 && s.x < 390)||{t:'1'}).t) || 1;
     // El precio unitario trae cuatro decimales ("452,9967") y el total va
