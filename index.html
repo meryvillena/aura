@@ -346,7 +346,7 @@ input#t-dtopct{width:58px;padding:3px 6px;font-size:13px;text-align:right;
   <!-- Para saber de un vistazo si el navegador tiene la última versión o una
        copia guardada de antes. Sin esto no hay forma de distinguirlo, y ya nos
        costó una tarde: se estuvo probando una versión vieja sin saberlo. -->
-  <p class="version">Versión del <span id="version">02/11/2026</span> ·
+  <p class="version">Versión del <span id="version">04/11/2026</span> ·
      si te falla algo, recarga con <b>Cmd + Shift + R</b> antes de nada</p>
   <div id="error" class="error oculto"></div>
 
@@ -1485,9 +1485,23 @@ const PROVEEDORES = [
     referencia:   (t.match(/Referencia:\s*(.*)/)||[])[1] || ''
   }),
   base: t => { const m = t.match(/Base Imponible:\s*([\d.,]+)/); return m ? num(m[1]) : null; },
-  bloques: lineas => emparejar(lineas, l => /^Pos\./.test(l.t), l => /^UDS:/.test(l.t)),
+  // Además de las ventanas, Indalco imprime líneas "Suplemento NATURKOLOR76" con
+  // su propio UDS: y sin Pos. (68.820: 270 € que no cuadraban). Van como partida
+  // aparte, sin plano ni medidas.
+  bloques: lineas => emparejar(lineas, l => /^Pos\./.test(l.t), l => /^UDS:/.test(l.t))
+    .concat(emparejar(lineas, l => /^Suplemento\b/i.test(l.t), l => /^UDS:/.test(l.t))
+              .map(b => Object.assign(b, {tipo:'obra'})))
+    .sort((x, y) => x.h.orden - y.h.orden),
 
-  partida({h, cierre, dentro, trozos, pagina, lienzo, imgs, yCierre}){
+  partida({h, cierre, dentro, trozos, pagina, lienzo, imgs, yCierre, tipo}){
+    if (tipo === 'obra'){
+      const concepto = h.t.replace(/\s+/g,' ').trim();
+      return {tipo:'obra', pos: acortar(concepto, 70), ancho:null, alto:null,
+              altoHoja:null, cajon:null, color:'', herraje:'', transmitancia:'',
+              descripcion:[concepto], aspecto:0, plano:null,
+              uds: parseInt((cierre.t.match(/UDS:\s*(\d+)/)||[0,1])[1]) || 1,
+              coste: cifrasDe(trozos, cierre.y, 440)[0] || 0};
+    }
     const bloque = dentro.map(l => l.t).join('\n');
     // el nombre del hueco son solo los trozos de la izquierda: a la derecha
     // están las cabeceras Importe(€) y Total(€) y se pegarían al nombre
