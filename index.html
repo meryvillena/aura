@@ -1848,6 +1848,93 @@ const PROVEEDORES = [
   }
 },
 {
+  /* K.LINE (Grupo Almar / ALUALMA): una ventana por tabla "Ud. · Dibujo ·
+     Descripción · Precio Un · Total Neto", sin "Pos." ni "UDS:". Cada partida va de
+     la primera línea de descripción (x ≈ 170) a la fila de cifras de abajo:
+     unidades a la izquierda (x < 60) y precio unitario y total a la derecha.
+     El nombre del hueco es la primera línea SOLO si después viene otra antes de
+     "Color:" (v1 / Abisagrada…); si no, esa línea ya es el tipo de ventana.
+     En el margen izquierdo (x < 20) hay totales acumulados que no son de nadie:
+     se ignoran. El plano es un PNG incrustado. */
+  id: 'kline', nombre: 'K.LINE (Grupo Almar)',
+  detectar: t => /Serie\s+K\.?\s*LINE/i.test(t) && /Total\s+Neto/i.test(t),
+  cabecera: t => ({
+    numProveedor: ((t.match(/PRESUPUESTO\s+(\d{6,})/)||[])[1] || ''),
+    fecha: ((t.match(/Fecha:\s*(\d[\d\s]{0,3}\/\s*\d{1,2}\s*\/\s*\d{4})/)||[])[1] || '').replace(/\s/g,''),
+    obra: '',
+    referencia: ((t.match(/Referencia:\s*(.*)/)||[])[1] || '').trim()
+  }),
+  /* Este PDF escribe cada importe en trozos sueltos ("1" "376" ",34"), así que ni
+     una expresión regular ni `cifrasDe` los ven enteros. Se van juntando trozos
+     hasta que uno acaba en ",dd": ahí se cierra el importe. */
+  importes: trozos => {
+    const fuera = []; let acum = '';
+    trozos.forEach(t => { acum += t.trim(); if (/,\d{2}$/.test(acum)){ fuera.push(num(acum)); acum = ''; } });
+    return fuera;
+  },
+  base: function(t){
+    const ls = t.split('\n'), i = ls.findIndex(l => /\bNeto\s+IVA\s*\(/.test(l));
+    return i < 0 || !ls[i+1] ? null : (this.importes(ls[i+1].split(' '))[0] ?? null);
+  },
+
+  bloques(lineas){
+    const esCierre = l => l.trozos[0].x < 60 && /^\d+$/.test(l.trozos[0].t.trim()) &&
+                          l.trozos.filter(s => s.x > 440 && /^[\d.,]+$/.test(s.t.trim())).length >= 2;
+    const pares = [];
+    lineas.filter(esCierre).forEach(cierre => {
+      const cab = lineas.filter(l => l.orden < cierre.orden && /^Ud\.\s*Dibujo/.test(l.t)).pop();
+      if (!cab) return;
+      const h = lineas.find(l => l.orden > cab.orden && l.orden < cierre.orden &&
+                                 l.trozos.some(s => s.x >= 160 && s.x < 350));
+      if (h) pares.push({h, cierre});
+    });
+    return pares;
+  },
+
+  partida({h, cierre, dentro, trozos, pagina, lienzo, imgs, yCierre}){
+    const texto = l => unir(l.trozos.filter(s => s.x >= 160 && s.x < 355));
+    const lineasDesc = [h].concat(dentro.filter(l => l !== cierre && l.pag === h.pag))
+                          .map(texto).filter(Boolean);
+    const iColor = lineasDesc.findIndex(t => /^Color:/.test(t));
+    const conNombre = iColor > 1;                 // v1 / Abisagrada… / Color:
+    const p = {pos: conNombre ? lineasDesc[0].replace(/\s+/g,' ').trim() : ''};
+    const bloque = lineasDesc.join('\n');
+
+    // "6038,00" son 6.038 mm: se parte por la coma antes de quitar los puntos
+    const mmK = v => parseInt(String(v).split(',')[0].replace(/\./g,''), 10) || null;
+    const md = bloque.match(/Ancho Total:\s*([\d.,]+)\s*-\s*Alto Total:\s*([\d.,]+)/) ||
+               bloque.match(/Ancho:\s*([\d.,]+)\s*-\s*Alto:\s*([\d.,]+)/);
+    p.ancho = md ? mmK(md[1]) : null;
+    p.alto = p.altoHoja = md ? mmK(md[2]) : null;
+    p.cajon = null;
+    p.color = ((bloque.match(/Color:\s*(.*)/)||[])[1] || '').trim();
+    // el color sigue en la línea de debajo ("… - COBRE / TX EXT")
+    const iC = lineasDesc.findIndex(t => /^Color:/.test(t));
+    if (iC >= 0 && lineasDesc[iC+1] && /^TX\s/i.test(lineasDesc[iC+1]))
+      p.color = (p.color + ' ' + lineasDesc[iC+1]).replace(/\s+/g,' ').trim();
+    p.herraje = '';
+    const mt = [h].concat(dentro).map(l => l.t).join('\n').match(/\(Uw\):\s*(\d\s*,\s*\d+)/);
+    p.transmitancia = mt ? mt[1].replace(/\s/g,'') + ' W/m²K' : '';
+
+    let desc = lineasDesc.slice(conNombre ? 1 : 0);
+    // se quitan el color (y su segunda línea) y las medidas, que ya van en sus campos
+    const salto = new Set();
+    if (iC >= 0){ salto.add(lineasDesc[iC]); if (/^TX\s/i.test(lineasDesc[iC+1]||'')) salto.add(lineasDesc[iC+1]); }
+    p.descripcion = desc.filter(t => !salto.has(t) && !/^Ancho( Total)?:/.test(t));
+
+    p.uds = parseInt(cierre.trozos[0].t) || 1;
+    p.coste = this.importes(cierre.trozos.filter(s => s.x > 440).map(s => s.t))[0] || 0;
+
+    const img = imgs.find(i => i.arriba > h.y - 40 && i.arriba < yCierre);
+    p.aspecto = img ? img.altoImg / img.ancho : 1;
+    p.anchoPt = img ? img.ancho : null;
+    p.altoPt  = img ? img.altoImg : null;
+    p.plano = img ? (imagenNativa(pagina, img.nombre) ||
+                     (lienzo ? recortar(lienzo, img) : null)) : null;
+    return p;
+  }
+},
+{
   /* Persianas El Parque: mosquiteras y persianas, no ventanas. Su presupuesto
      no se parece a los demás: es una TABLA, una fila por artículo, sin "Pos.",
      sin "UDS:" y sin planos (la única imagen de la hoja es el logotipo).
@@ -2263,7 +2350,8 @@ async function leerPDF(buffer){
     const base = regla.base(p.texto);
     if (base != null){
       totales.base = base;
-      const mIva = p.texto.match(/(\d+)\s*%\s*I\.V\.A/) || p.texto.match(/I\.V\.A\.?\s*\(?\s*(\d+)/);
+      const mIva = p.texto.match(/(\d+)\s*%\s*I\.V\.A/) || p.texto.match(/I\.V\.A\.?\s*\(?\s*(\d+)/) ||
+                  p.texto.match(/\bIVA\s*\((\d+)/);
       if (mIva) totales.iva = parseInt(mIva[1]);
     }
   }
